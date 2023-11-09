@@ -7,3 +7,11 @@ edition = "2021"
 
 [dependencies]
 frenderer = "0.7.0"
+engine-simple = {path="../engine-simple"}
+winit = "0.28"
+rand = "0.8"
+image = {version="0.24.7", features=["png"]}
+
+[features]
+default = []
+webgl = ["engine-simple/webgl"]
