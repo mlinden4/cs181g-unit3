@@ -6,12 +6,45 @@ use engine_simple::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use rand::Rng;
 const W: f32 = 320.0;
 const H: f32 = 240.0;
-const GUY_SPEED: f32 = 4.0;
+const GUY_HORZ_SPEED: f32 = 4.0;
 const SPRITE_MAX: usize = 16;
 const CATCH_DISTANCE: f32 = 16.0;
 const COLLISION_STEPS: usize = 3;
+const GRAVITY: f32 = 1.0;
 struct Guy {
     pos: Vec2,
+    vel: Vec2,
+    grounded: bool,
+}
+
+impl Guy {
+
+    fn doGravity(&mut self) {
+        if(self.vel.y >= -15.0) {            
+            self.vel.y -= GRAVITY;
+        }
+        
+    }
+
+    fn setHorzVel(&mut self, direction:f32) {
+        self.vel.x = direction * GUY_HORZ_SPEED;
+    }
+
+    fn jump(&mut self) {
+        if(self.grounded){
+            self.vel.y = 15.0;
+            self.grounded = false;
+        }
+        
+    }
+
+    fn moveGuy(&mut self) {
+        self.doGravity();
+        self.pos.x += self.vel.x;
+        self.pos.y += self.vel.y;
+    }
+
+    
 }
 
 struct Apple {
@@ -63,10 +96,19 @@ impl engine::Game for Game {
                 x: W / 2.0,
                 y: 24.0,
             },
+            vel: Vec2 {
+                x: 0.0,
+                y: 0.0,
+            },
+            grounded: true,
         };
         let floor = AABB {
             center: Vec2 { x: W / 2.0, y: 8.0 },
-            size: Vec2 { x: W, y: 16.0 },
+            size: Vec2 { x: 128.0/*W*/, y: 16.0 },
+        };
+        let floor2 = AABB {
+            center: Vec2 { x: W / 4.0, y: 64.0 },
+            size: Vec2 { x: 32.0/*W*/, y: 16.0 },
         };
         let left_wall = AABB {
             center: Vec2 { x: 8.0, y: H / 2.0 },
@@ -88,7 +130,7 @@ impl engine::Game for Game {
         Game {
             camera,
             guy,
-            walls: vec![left_wall, right_wall, floor],
+            walls: vec![left_wall, right_wall, floor, floor2],
             apples: Vec::with_capacity(16),
             apple_timer: 0,
             score: 0,
@@ -96,8 +138,18 @@ impl engine::Game for Game {
         }
     }
     fn update(&mut self, engine: &mut Engine) {
-        let dir = engine.input.key_axis(engine::Key::Left, engine::Key::Right);
-        self.guy.pos.x += dir * GUY_SPEED;
+        let dir_x = engine.input.key_axis(engine::Key::Left, engine::Key::Right);
+        let dir_y = engine.input.key_axis(engine::Key::Down, engine::Key::Up);
+
+        if(dir_y > 0.0) {
+            self.guy.jump();
+        }
+        self.guy.setHorzVel(dir_x);
+        self.guy.moveGuy();
+        // self.guy.pos.x += dirX * GUY_SPEED;
+        // self.guy.pos.y += dirY * GUY_SPEED;
+
+
         let mut contacts = Vec::with_capacity(self.walls.len());
         // TODO: for multiple guys this might be better as flags on the guy for what side he's currently colliding with stuff on
         for _iter in 0..COLLISION_STEPS {
@@ -146,7 +198,21 @@ impl engine::Game for Game {
                     self.guy.pos.x += disp.x;
                     // so far it seems resolved; for multiple guys this should probably set a flag on the guy
                 } else if disp.y.abs() <= disp.x.abs() {
-                    self.guy.pos.y += disp.y;
+                    // self.guy.pos.y += disp.y;
+                    if(self.guy.vel.y < 0.0) {
+                        self.guy.pos.y =wall.center.y + wall.size.y; 
+                        
+                        
+                        self.guy.grounded = true;
+
+
+
+                    }else if (self.guy.vel.y > 0.0) {
+                        self.guy.pos.y += disp.y;
+                        
+                    }
+                    self.guy.vel.y = 0.0;
+                    
                     // so far it seems resolved; for multiple guys this should probably set a flag on the guy
                 }
             }
