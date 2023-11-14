@@ -105,10 +105,14 @@ impl engine::Game for Game {
         let floor = AABB {
             center: Vec2 { x: W / 2.0, y: 8.0 },
             size: Vec2 { x: 128.0/*W*/, y: 16.0 },
+        };                                                                      //              size_x
+        let floor2 = AABB {                                               //            --------------
+            center: Vec2 { x: W / 4.0, y: 64.0 },                               //   size_y   | c_xy x     |
+            size: Vec2 { x: 32.0/*W*/, y: 16.0 },                               //            --------------
         };
-        let floor2 = AABB {
-            center: Vec2 { x: W / 4.0, y: 64.0 },
-            size: Vec2 { x: 32.0/*W*/, y: 16.0 },
+        let test_wall = AABB {
+            center: Vec2 { x: 32.0, y: 128.0 },
+            size: Vec2 { x: 16.0, y: 128.0 },
         };
         let left_wall = AABB {
             center: Vec2 { x: 8.0, y: H / 2.0 },
@@ -130,7 +134,7 @@ impl engine::Game for Game {
         Game {
             camera,
             guy,
-            walls: vec![left_wall, right_wall, floor, floor2],
+            walls: vec![left_wall, right_wall, test_wall, floor, floor2],
             apples: Vec::with_capacity(16),
             apple_timer: 0,
             score: 0,
@@ -200,7 +204,9 @@ impl engine::Game for Game {
                 } else if disp.y.abs() <= disp.x.abs() {
                     // self.guy.pos.y += disp.y;
                     if(self.guy.vel.y < 0.0) {
-                        self.guy.pos.y =wall.center.y + wall.size.y; 
+                        //Falling
+
+                        self.guy.pos.y = wall.center.y + wall.size.y; 
                         
                         
                         self.guy.grounded = true;
@@ -208,6 +214,8 @@ impl engine::Game for Game {
 
 
                     }else if (self.guy.vel.y > 0.0) {
+                        //Going up
+
                         self.guy.pos.y += disp.y;
                         
                     }
