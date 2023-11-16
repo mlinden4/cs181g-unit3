@@ -1,5 +1,6 @@
 // TODO: use AABB instead of Rect for centered box, so collision checking doesn't have to offset by half size
 
+use engine::Key;
 use engine_simple as engine;
 use engine_simple::wgpu;
 use engine_simple::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
@@ -8,7 +9,7 @@ use std::path::Path;
 const W: f32 = 320.0;
 const H: f32 = 240.0;
 const GUY_HORZ_SPEED: f32 = 4.0;
-const SPRITE_MAX: usize = 16;
+const SPRITE_MAX: usize = 32;
 const CATCH_DISTANCE: f32 = 16.0;
 const COLLISION_STEPS: usize = 3;
 const GRAVITY: f32 = 1.0;
@@ -26,7 +27,7 @@ struct Guy {
 impl Guy {
 
     fn doGravity(&mut self, ) {
-        if(self.vel.y >= -15.0) {            
+        if self.vel.y >= -10.0 {            
             self.vel.y -= GRAVITY;
         }
         
@@ -37,8 +38,8 @@ impl Guy {
     }
 
     fn handle_jump(&mut self, vert_dir: f32) {
-        if(vert_dir > 0.0 && self.grounded){
-            self.vel.y = 15.0;
+        if vert_dir > 0.0 && self.grounded {
+            self.vel.y = 10.0;
             self.grounded = false;
         }
         
@@ -63,15 +64,21 @@ struct Apple {
     vel: Vec2,
 }
 
+struct SpriteTile {
+    collision: AABB,
+    tex_coord: (u16, u16),
+}
+
 struct Game {
     camera: engine::Camera,
-    collision_objects: Vec<AABB>,
+    collision_objects: Vec<SpriteTile>,
     guy: Guy,
     apples: Vec<Apple>,
     apple_timer: u32,
     score: u32,
     font: engine_simple::BitFont,
 }
+
 
 
 fn newSpriteGroup(sprite_path: &str, engine: &mut Engine, camera_ref: &Camera) {
@@ -96,6 +103,32 @@ fn newSpriteGroup(sprite_path: &str, engine: &mut Engine, camera_ref: &Camera) {
     );
 
 }
+
+fn newSpriteTile_Square(pos_x: f32, pos_y: f32, size: f32, tex_x: u16, tex_y: u16) -> SpriteTile {
+    SpriteTile {
+        collision: AABB::new(pos_x, pos_y, size, size),
+        tex_coord: (tex_x, tex_y),
+    }
+}
+
+fn newSpriteTile_Rect(pos_x: f32, pos_y: f32, width: f32, height: f32, tex_x: u16, tex_y: u16) -> SpriteTile {
+    SpriteTile {
+        collision: AABB::new(pos_x, pos_y, width, height),
+        tex_coord: (tex_x, tex_y),
+    }
+}
+
+ fn addSpriteTileRow(col_objs: &mut Vec<SpriteTile>, sprite_idxs: Vec<(u16, u16)>, y_pos: f32, size: f32) {
+    
+    let mut x_pos: f32 = 16.0;
+    let x_incr: f32 = 32.0;
+
+    for s_idx in sprite_idxs.iter() {
+        col_objs.push(newSpriteTile_Square(x_pos, y_pos, size, s_idx.0, s_idx.1));
+        x_pos += x_incr;
+    }
+ }
+
 
 // Meant to get from a uniform grid
 fn getSpriteFromSheet(sheet_num: u16, x: u16, y: u16, depth: u16, sprite_size: u16) -> SheetRegion {
@@ -124,8 +157,10 @@ impl engine::Game for Game {
         };
         #[cfg(not(target_arch = "wasm32"))]
 
-        newSpriteGroup("content/demo.png", engine, &camera);
-        newSpriteGroup("content/Tiles/tile_sheet.png", engine, &camera);
+        
+
+        newSpriteGroup("content/demo.png", engine, &camera); // 0
+        newSpriteGroup("content/Tiles/tile_sheet.png", engine, &camera); // 1
 
         // let sprite_img = image::open("content/demo.png").unwrap().into_rgba8();
         // let sprite_tex = engine.renderer.gpu.create_texture(
@@ -145,13 +180,13 @@ impl engine::Game for Game {
         let guy = Guy {
             pos: Vec2 {
                 x: W / 2.0,
-                y: 24.0,
+                y: H / 2.0,
             },
             vel: Vec2 {
                 x: 0.0,
                 y: 0.0,
             },
-            grounded: true,
+            grounded: false,
         };
 
 
@@ -160,27 +195,52 @@ impl engine::Game for Game {
         //            --------------
         //   size_y   | c_xy x     |
         //            --------------
-        let floor = AABB::new(W / 2.0, 8.0, 128.0, 16.0);
 
-        let floor2 = AABB::new(W / 4.0, 64.0, 32.0, 16.0);
+        let mut collision_objects: Vec<SpriteTile> = Vec::default(); 
+        let row1_sprite_idxs = vec![(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),];
+        let row2_sprite_idxs = vec![(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),];
+
+        addSpriteTileRow(&mut collision_objects, row1_sprite_idxs, 16.0, 32.0);
+        addSpriteTileRow(&mut collision_objects, row2_sprite_idxs, 48.0, 32.0);
+
+        // let full_tile0 = newSpriteTile_Square(16.0, 16.0, 32.0, 1, 1); //AABB::new(16.0, 16.0, 32.0, 32.0);
+        // let full_tile1 = newSpriteTile_Square(48.0, 16.0, 32.0, 1, 1);
+        // let full_tile2 = newSpriteTile_Square(80.0, 16.0, 32.0, 1, 1);
+        // let full_tile3 = newSpriteTile_Square(112.0, 16.0, 32.0, 1, 1);
+        // let full_tile4 = newSpriteTile_Square(144.0, 16.0, 32.0, 1, 1);
+        // let full_tile5 = newSpriteTile_Square(176.0, 16.0, 32.0, 1, 1);
+        // let full_tile6 = newSpriteTile_Square(208.0, 16.0, 32.0, 1, 1);
+        // let full_tile7 = newSpriteTile_Square(240.0, 16.0, 32.0, 1, 1);
+        // let full_tile8 = newSpriteTile_Square(272.0, 16.0, 32.0, 1, 1);
+        // let full_tile9 = newSpriteTile_Square(304.0, 16.0, 32.0, 1, 1);
+
+
+        // let floor = newSpriteTile_Rect(W / 2.0, 8.0, W / 3.0, 32.0, 1, 1);
+        
+
+        let floor2 = newSpriteTile_Rect(W / 4.0, 128.0, 32.0, 16.0, 1, 1);
+        collision_objects.push(floor2);
 
         // let test_wall = AABB::new(32.0, 75.0, 160.0, 50.0); 
-        let test_wall = AABB::new(W / 3.0, 128.0, 32.0, 64.0);
-        
-        let left_wall = AABB::new(8.0, H / 2.0, 16.0, H);
-      
-        let right_wall = AABB::new(W - 8.0, H /2.0, 16.0, H); 
+        let test_wall = newSpriteTile_Rect(W / 3.0, 100.0, 32.0, 64.0, 1, 1);
+        collision_objects.push(test_wall);
+
+        let left_wall = newSpriteTile_Rect(8.0, H / 2.0, 16.0, H, 1, 1);
+        collision_objects.push(left_wall);
+
+        let right_wall = newSpriteTile_Rect(W - 8.0, H /2.0, 16.0, H, 1, 1);
+        collision_objects.push(right_wall);
 
         let font = engine::BitFont::with_sheet_region(
             '0'..='9',
             SheetRegion::new(0, 0, 512, 0, 80, 8),
             10,
         );
-
+        //vec![full_tile0, full_tile1, full_tile2, full_tile3, full_tile4, full_tile5, full_tile6, full_tile7, full_tile8, full_tile9, left_wall, right_wall, test_wall, floor, floor2]
         Game {
             camera,
             guy,
-            collision_objects: vec![left_wall, right_wall, test_wall, floor, floor2],
+            collision_objects,
             apples: Vec::with_capacity(16),
             apple_timer: 0,
             score: 0,
@@ -197,7 +257,12 @@ impl engine::Game for Game {
         // Character movement ------------------------------------------------------------------------
 
 
-
+        if engine.input.is_key_pressed(engine::Key::R) {
+            self.guy.pos = Vec2 {
+                x: W / 2.0,
+                y: 24.0,
+            }
+        }
 
 
 
@@ -218,7 +283,7 @@ impl engine::Game for Game {
                 self.collision_objects
                     .iter()
                     .enumerate()
-                    .filter_map(|(ri, w)| w.displacement(guy_aabb).map(|d| (ri, d))),
+                    .filter_map(|(ri, w)| w.collision.displacement(guy_aabb).map(|d| (ri, d))),
             );
             if contacts.is_empty() {
                 break;
@@ -237,35 +302,56 @@ impl engine::Game for Game {
                     center: self.guy.pos,
                     size: Vec2 { x: 16.0, y: 16.0 },
                 };
-                let wall = self.collision_objects[*wall_idx];
+                let wall = self.collision_objects[*wall_idx].collision;
                 let mut disp = wall.displacement(guy_aabb).unwrap_or(Vec2::ZERO);
+                
                 // We got to a basically zero collision amount
                 if disp.x.abs() < std::f32::EPSILON || disp.y.abs() < std::f32::EPSILON {
                     break;
                 }
-                // Guy is left of wall, push left
-                if self.guy.pos.x < wall.center.x {
-                    disp.x *= -1.0;
-                }
+                
+
                 // Guy is below wall, push down
                 if self.guy.pos.y < wall.center.y {
                     disp.y *= -1.0;
+                }else if self.guy.pos.y > wall.center.y {
+                    disp.y *= 1.0;
                 }
-                if disp.x.abs() <= disp.y.abs() {
-                    self.guy.pos.x += disp.x;
-                    // so far it seems resolved; for multiple guys this should probably set a flag on the guy
-                } else if disp.y.abs() <= disp.x.abs() {
+
+                // Guy is left of wall, push left
+                if self.guy.pos.x < wall.center.x {
+                    disp.x *= -1.0;
+
+                // Guy is right of wall, push left
+                } else if self.guy.pos.x > wall.center.x {
+                    disp.x *= 1.0;
+                }
+
+                
+                if disp.y.abs() <= disp.x.abs(){
                     
-                    // self.guy.pos.y += disp.y;
-                    if(self.guy.vel.y < 0.0) {
-                        self.guy.grounded = true;
-                    }
+                    // Guy is above wall, push up
 
                     self.guy.pos.y += disp.y;
                     self.guy.vel.y = 0.0;
+
+                    if(self.guy.vel.y <= 0.0) {
+                        self.guy.grounded = true;
+                    }
+
+                    
+                    // so far it seems resolved; for multiple guys this should probably set a flag on the guy
+                }else if  disp.x.abs() <= disp.y.abs() {
+                    self.guy.pos.x += disp.x;
+                    self.guy.vel.x = 0.0;
                     
                     // so far it seems resolved; for multiple guys this should probably set a flag on the guy
                 }
+
+                println!("x vel: {}, y vel: {}", self.guy.vel.x , self.guy.vel.y );
+                
+
+                
             }
         }
         // Collision ------------------------------------------------------------------------
@@ -348,9 +434,9 @@ impl engine::Game for Game {
                 .iter_mut()
                 .zip(uvs1[WALL_START..guy_idx].iter_mut()),
         ) {
-            *trf = (*wall).into();
+            *trf = (wall.collision).into();
             // *uv = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, 0, 480, 12, 8, 8);
-            *uv = getSpriteFromSheet(TILE_SPRITE_GROUP as u16, 4, 0, 12, TILE_SIZE);
+            *uv = getSpriteFromSheet(TILE_SPRITE_GROUP as u16, wall.tex_coord.0, wall.tex_coord.1, 12, TILE_SIZE);
             // SheetRegion::new(0, 0, 480, 12, 8, 8);
         }
 
@@ -413,7 +499,7 @@ impl engine::Game for Game {
         engine
             .renderer
             .sprites
-            .upload_sprites(&engine.renderer.gpu, TILE_SPRITE_GROUP, 0..6);
+            .upload_sprites(&engine.renderer.gpu, TILE_SPRITE_GROUP, 0..self.collision_objects.len() + 1);
         engine
             .renderer
             .sprites
