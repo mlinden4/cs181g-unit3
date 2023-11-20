@@ -9,10 +9,11 @@ use std::path::Path;
 const W: f32 = 320.0;
 const H: f32 = 240.0;
 const GUY_HORZ_SPEED: f32 = 4.0;
-const SPRITE_MAX: usize = 32;
+const SPRITE_MAX: usize = 128;
 const CATCH_DISTANCE: f32 = 16.0;
 const COLLISION_STEPS: usize = 3;
 const GRAVITY: f32 = 1.0;
+const NO_COLLISION: u16 = 9;
 
 const TILE_SIZE: u16 = 256;
 const TILE_SHEET_W: u16 = 6 * TILE_SIZE;
@@ -197,11 +198,16 @@ impl engine::Game for Game {
         //            --------------
 
         let mut collision_objects: Vec<SpriteTile> = Vec::default(); 
-        let row1_sprite_idxs = vec![(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),];
-        let row2_sprite_idxs = vec![(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),];
+        
+        let row4_sprite_idxs = vec![(9,9),(9,9),(0,3),(1,3),(2,3),(9,9),(9,9),(3,4),(9,9),(9,9),];
+        let row3_sprite_idxs = vec![(1,4),(9,9),(9,9),(9,9),(9,9),(9,9),(9,9),(9,9),(9,9),(9,9),];
+        let row2_sprite_idxs = vec![(3,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,0),(0,0),(0,4),];
+        let row1_sprite_idxs = vec![(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(1,0),(1,0),(3,4),];
 
         addSpriteTileRow(&mut collision_objects, row1_sprite_idxs, 16.0, 32.0);
         addSpriteTileRow(&mut collision_objects, row2_sprite_idxs, 48.0, 32.0);
+        addSpriteTileRow(&mut collision_objects, row3_sprite_idxs, 80.0, 32.0);
+        addSpriteTileRow(&mut collision_objects, row4_sprite_idxs, 112.0, 32.0);
 
         // let full_tile0 = newSpriteTile_Square(16.0, 16.0, 32.0, 1, 1); //AABB::new(16.0, 16.0, 32.0, 32.0);
         // let full_tile1 = newSpriteTile_Square(48.0, 16.0, 32.0, 1, 1);
@@ -218,12 +224,12 @@ impl engine::Game for Game {
         // let floor = newSpriteTile_Rect(W / 2.0, 8.0, W / 3.0, 32.0, 1, 1);
         
 
-        let floor2 = newSpriteTile_Rect(W / 4.0, 128.0, 32.0, 16.0, 1, 1);
-        collision_objects.push(floor2);
+        // let floor2 = newSpriteTile_Rect(W / 4.0, 128.0, 32.0, 16.0, 1, 1);
+        // collision_objects.push(floor2);
 
         // let test_wall = AABB::new(32.0, 75.0, 160.0, 50.0); 
-        let test_wall = newSpriteTile_Rect(W / 3.0, 100.0, 32.0, 64.0, 1, 1);
-        collision_objects.push(test_wall);
+        // let test_wall = newSpriteTile_Rect(W / 3.0, 100.0, 32.0, 64.0, 1, 1);
+        // collision_objects.push(test_wall);
 
         let left_wall = newSpriteTile_Rect(8.0, H / 2.0, 16.0, H, 1, 1);
         collision_objects.push(left_wall);
@@ -282,6 +288,7 @@ impl engine::Game for Game {
             contacts.extend(
                 self.collision_objects
                     .iter()
+                    .filter(|tile| tile.tex_coord.0 != NO_COLLISION)
                     .enumerate()
                     .filter_map(|(ri, w)| w.collision.displacement(guy_aabb).map(|d| (ri, d))),
             );
@@ -294,6 +301,7 @@ impl engine::Game for Game {
                     .partial_cmp(&d1.length_squared())
                     .unwrap()
             });
+        
 
 
             for (wall_idx, _disp) in contacts.iter() {
