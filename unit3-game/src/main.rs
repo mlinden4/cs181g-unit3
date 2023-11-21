@@ -72,6 +72,7 @@ struct SpriteTile {
 struct Game {
     camera: engine::Camera,
     collision_objects: Vec<SpriteTile>,
+    doors: Vec<SpriteTile>,
     guy: Guy,
     apples: Vec<Apple>,
     apple_timer: u32,
@@ -161,6 +162,7 @@ impl engine::Game for Game {
 
         newSpriteGroup("content/demo.png", engine, &camera); // 0
         newSpriteGroup("content/Tiles/tile_sheet.png", engine, &camera); // 1
+        newSpriteGroup("content/Objects/DoorUnlocked.png", engine, &camera); // 2
 
         // let sprite_img = image::open("content/demo.png").unwrap().into_rgba8();
         // let sprite_tex = engine.renderer.gpu.create_texture(
@@ -231,6 +233,10 @@ impl engine::Game for Game {
         let right_wall = newSpriteTile_Rect(W - 8.0, H /2.0, 16.0, H, 1, 1);
         collision_objects.push(right_wall);
 
+        let mut doors: Vec<SpriteTile> = Vec::default(); 
+        let door1 = newSpriteTile_Rect(0.0, 0.0, 2.81, 4.64, 2, 1);
+        doors.push(door1);
+
         let font = engine::BitFont::with_sheet_region(
             '0'..='9',
             SheetRegion::new(0, 0, 512, 0, 80, 8),
@@ -241,6 +247,7 @@ impl engine::Game for Game {
             camera,
             guy,
             collision_objects,
+            doors,
             apples: Vec::with_capacity(16),
             apple_timer: 0,
             score: 0,
@@ -399,7 +406,8 @@ impl engine::Game for Game {
         
         let DEMO_SPRITE_GROUP = 0;
         let TILE_SPRITE_GROUP = 1;
-        
+        let DOOR_SPRITE_GROUP = 2;
+
 
         // [idx 0, idx 1..guy_idx, guy_idx, apple_start..)]
         // [Background, walls..., guy, apples...]
@@ -427,7 +435,7 @@ impl engine::Game for Game {
         // let (trfs2, uvs2) = engine.renderer.sprites.get_sprites_mut(TILE_SPRITE_GROUP);
 
         // set walls
-        const WALL_START: usize = 1;
+        const WALL_START: usize = 2;
         let guy_idx = WALL_START + self.collision_objects.len();
         for (wall, (trf, uv)) in self.collision_objects.iter().zip(
             trfs1[WALL_START..guy_idx]
@@ -442,9 +450,12 @@ impl engine::Game for Game {
 
         let (trfs, uvs) = engine.renderer.sprites.get_sprites_mut(DEMO_SPRITE_GROUP);
 
-
-
-
+        //set doors
+        let (trfs2, uvs2) = engine.renderer.sprites.get_sprites_mut(DOOR_SPRITE_GROUP);
+        trfs2[0] = AABB::new(W - 60.0, H/2.0, 32.0, 44.0).into();  // Create a non-collision AABB for use in the doors
+        uvs2[0] = getSpriteFromSheet(DOOR_SPRITE_GROUP as u16, 0, 0, 281, 464);
+    
+        let (trfs, uvs) = engine.renderer.sprites.get_sprites_mut(DEMO_SPRITE_GROUP);
 
         // set guy
         trfs[guy_idx] = AABB {
@@ -500,6 +511,10 @@ impl engine::Game for Game {
             .renderer
             .sprites
             .upload_sprites(&engine.renderer.gpu, TILE_SPRITE_GROUP, 0..self.collision_objects.len() + 1);
+        engine
+            .renderer
+            .sprites
+            .upload_sprites(&engine.renderer.gpu, DOOR_SPRITE_GROUP, 0..self.doors.len() + 1);
         engine
             .renderer
             .sprites
