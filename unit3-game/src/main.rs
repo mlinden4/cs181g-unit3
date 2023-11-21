@@ -5,7 +5,10 @@ use engine_simple as engine;
 use engine_simple::wgpu;
 use engine_simple::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use rand::Rng;
+use std::os::unix::fs::FileTypeExt;
 use std::path::Path;
+use std::fs::read_to_string;
+
 const W: f32 = 320.0;
 const H: f32 = 240.0;
 const GUY_HORZ_SPEED: f32 = 4.0;
@@ -14,6 +17,11 @@ const CATCH_DISTANCE: f32 = 16.0;
 const COLLISION_STEPS: usize = 3;
 const GRAVITY: f32 = 1.0;
 const NO_COLLISION: u16 = 9;
+
+const TOP_HALF_COLLISION: [(u16, u16); 4] = [(0, 3), (1, 3), (2, 3), (3, 3)];
+const BOT_HALF_COLLISION: [(u16, u16); 2] = [(0,0), (2,2)];
+
+// const LEFT: &'static [&'static str] = &["Hello", "World", "!"];
 
 const TILE_SIZE: u16 = 256;
 const TILE_SHEET_W: u16 = 6 * TILE_SIZE;
@@ -74,13 +82,64 @@ struct Game {
     camera: engine::Camera,
     collision_objects: Vec<SpriteTile>,
     guy: Guy,
-    apples: Vec<Apple>,
-    apple_timer: u32,
     score: u32,
     font: engine_simple::BitFont,
 }
 
+fn loadLevel(collision_objects: &mut Vec<SpriteTile>, num: u16){
 
+    let mut x_pos: f32 = 16.0;
+    let mut y_pos: f32 = 16.0;
+    let size: f32 = 32.0;
+    // let incr: f32 = 32.0;
+
+    let binding = read_to_string(format!("content/Levels/Level{}.txt", num))
+        .unwrap();
+    // let str_tex_coords = binding
+    //     .split(|c| c == ' ')
+    //     .filter(|&s| !s.is_empty());
+
+    let segments: Vec<&str> = binding.split(|c| c == ' ' || c == '\n' || c == '(' || c == ')')
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    for segment in segments.iter() {
+        println!("{}", segment);
+    }
+
+    // let tex_coords: Vec<(u16,u16)> = segments.iter()
+    //     .for_each(|tex_coord| tex_coord.split(",") );
+
+    let mut tex_coords: Vec<(u16,u16)> = Vec::default();
+
+    for str_tex_coord in segments {
+        let parts: Vec<&str> = str_tex_coord.split(',').collect();
+        tex_coords.push((parts[0].parse().unwrap(), parts[1].parse().unwrap()));
+    }
+
+
+    for tex_coord in tex_coords {
+
+
+        if(TOP_HALF_COLLISION.contains(&tex_coord)){
+            collision_objects.push(newSpriteTile_Rect(x_pos, y_pos + (size/4.0), size, size/2.0, tex_coord.0, tex_coord.1));
+        }else if(BOT_HALF_COLLISION.contains(&tex_coord)){
+            collision_objects.push(newSpriteTile_Rect(x_pos, y_pos - (size/4.0), size, size/2.0, tex_coord.0, tex_coord.1));
+        }else{
+            collision_objects.push(newSpriteTile_Square(x_pos, y_pos, size, tex_coord.0, tex_coord.1));
+        }
+        
+        if(x_pos == 16.0 + size * 9.0){
+            x_pos = 16.0;
+            y_pos += size;
+        }else{
+            x_pos += size;
+        }
+    }
+    
+    // collision_objects.reverse();
+
+}
 
 fn newSpriteGroup(sprite_path: &str, engine: &mut Engine, camera_ref: &Camera) {
     
@@ -112,6 +171,7 @@ fn newSpriteTile_Square(pos_x: f32, pos_y: f32, size: f32, tex_x: u16, tex_y: u1
     }
 }
 
+
 fn newSpriteTile_Rect(pos_x: f32, pos_y: f32, width: f32, height: f32, tex_x: u16, tex_y: u16) -> SpriteTile {
     SpriteTile {
         collision: AABB::new(pos_x, pos_y, width, height),
@@ -125,15 +185,29 @@ fn newSpriteTile_Rect(pos_x: f32, pos_y: f32, width: f32, height: f32, tex_x: u1
     let x_incr: f32 = 32.0;
 
     for s_idx in sprite_idxs.iter() {
-        col_objs.push(newSpriteTile_Square(x_pos, y_pos, size, s_idx.0, s_idx.1));
+
+
+        if(TOP_HALF_COLLISION.contains(s_idx)){
+            col_objs.push(newSpriteTile_Rect(x_pos, y_pos + (size/4.0), size, size/2.0, s_idx.0, s_idx.1));
+        }else if(BOT_HALF_COLLISION.contains(s_idx)){
+            col_objs.push(newSpriteTile_Rect(x_pos, y_pos - (size/4.0), size, size/2.0, s_idx.0, s_idx.1));
+        }else{
+            col_objs.push(newSpriteTile_Square(x_pos, y_pos, size, s_idx.0, s_idx.1));
+        }
+        
         x_pos += x_incr;
     }
  }
 
 
-// Meant to get from a uniform grid
-fn getSpriteFromSheet(sheet_num: u16, x: u16, y: u16, depth: u16, sprite_size: u16) -> SheetRegion {
-    SheetRegion::new(sheet_num, x*sprite_size, y*sprite_size, depth, sprite_size, sprite_size)
+
+fn getSpriteFromSheet(sheet_num: u16, tex_coord: &(u16,u16), depth: u16, sprite_size: u16) -> SheetRegion {
+    if TOP_HALF_COLLISION.contains(tex_coord) {
+        SheetRegion::new(sheet_num, tex_coord.0*sprite_size, tex_coord.1*sprite_size, depth, sprite_size, sprite_size/2)
+    }else{
+        // *trf = (wall.collision).into();
+        SheetRegion::new(sheet_num, tex_coord.0*sprite_size, tex_coord.1*sprite_size, depth, sprite_size, sprite_size)
+    }
 }
 
 // Meant to just get it directly based on data
@@ -157,26 +231,8 @@ impl engine::Game for Game {
                 .into_rgba8()
         };
         #[cfg(not(target_arch = "wasm32"))]
-
-        
-
         newSpriteGroup("content/demo.png", engine, &camera); // 0
         newSpriteGroup("content/Tiles/tile_sheet.png", engine, &camera); // 1
-
-        // let sprite_img = image::open("content/demo.png").unwrap().into_rgba8();
-        // let sprite_tex = engine.renderer.gpu.create_texture(
-        //     &sprite_img,
-        //     wgpu::TextureFormat::Rgba8UnormSrgb,
-        //     sprite_img.dimensions(),
-        //     Some("spr-demo.png"),
-        // );
-        // engine.renderer.sprites.add_sprite_group(
-        //     &engine.renderer.gpu,
-        //     &sprite_tex,
-        //     vec![Transform::zeroed(); SPRITE_MAX], //bg, three walls, guy, a few apples
-        //     vec![SheetRegion::zeroed(); SPRITE_MAX],
-        //     camera,
-        // );
 
         let guy = Guy {
             pos: Vec2 {
@@ -189,6 +245,9 @@ impl engine::Game for Game {
             },
             grounded: false,
         };
+        
+        let mut collision_objects: Vec<SpriteTile> = Vec::default(); 
+        loadLevel(&mut collision_objects, 0);
 
 
 
@@ -197,62 +256,38 @@ impl engine::Game for Game {
         //   size_y   | c_xy x     |
         //            --------------
 
-        let mut collision_objects: Vec<SpriteTile> = Vec::default(); 
         
-        let row4_sprite_idxs = vec![(9,9),(9,9),(0,3),(1,3),(2,3),(9,9),(9,9),(3,4),(9,9),(9,9),];
-        let row3_sprite_idxs = vec![(1,4),(9,9),(9,9),(9,9),(9,9),(9,9),(9,9),(9,9),(9,9),(9,9),];
-        let row2_sprite_idxs = vec![(3,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,0),(0,0),(0,4),];
-        let row1_sprite_idxs = vec![(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(1,0),(1,0),(3,4),];
-
-        addSpriteTileRow(&mut collision_objects, row1_sprite_idxs, 16.0, 32.0);
-        addSpriteTileRow(&mut collision_objects, row2_sprite_idxs, 48.0, 32.0);
-        addSpriteTileRow(&mut collision_objects, row3_sprite_idxs, 80.0, 32.0);
-        addSpriteTileRow(&mut collision_objects, row4_sprite_idxs, 112.0, 32.0);
-
-        // let full_tile0 = newSpriteTile_Square(16.0, 16.0, 32.0, 1, 1); //AABB::new(16.0, 16.0, 32.0, 32.0);
-        // let full_tile1 = newSpriteTile_Square(48.0, 16.0, 32.0, 1, 1);
-        // let full_tile2 = newSpriteTile_Square(80.0, 16.0, 32.0, 1, 1);
-        // let full_tile3 = newSpriteTile_Square(112.0, 16.0, 32.0, 1, 1);
-        // let full_tile4 = newSpriteTile_Square(144.0, 16.0, 32.0, 1, 1);
-        // let full_tile5 = newSpriteTile_Square(176.0, 16.0, 32.0, 1, 1);
-        // let full_tile6 = newSpriteTile_Square(208.0, 16.0, 32.0, 1, 1);
-        // let full_tile7 = newSpriteTile_Square(240.0, 16.0, 32.0, 1, 1);
-        // let full_tile8 = newSpriteTile_Square(272.0, 16.0, 32.0, 1, 1);
-        // let full_tile9 = newSpriteTile_Square(304.0, 16.0, 32.0, 1, 1);
-
-
-        // let floor = newSpriteTile_Rect(W / 2.0, 8.0, W / 3.0, 32.0, 1, 1);
         
+        // let row4_sprite_idxs: Vec<(u16,u16)> = vec![(9,9),(9,9),(0,3),(1,3),(2,3),(9,9),(9,9),(3,4),(9,9),(9,9),];
+        // let row3_sprite_idxs: Vec<(u16,u16)> = vec![(1,4),(1,1),(9,9),(9,9),(9,9),(9,9),(9,9),(9,9),(9,9),(9,9),];
+        // let row2_sprite_idxs: Vec<(u16,u16)> = vec![(3,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,4),(0,0),(0,0),(0,4),];
+        // let row1_sprite_idxs: Vec<(u16,u16)> = vec![(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(3,4),(1,0),(1,0),(3,4),];
 
-        // let floor2 = newSpriteTile_Rect(W / 4.0, 128.0, 32.0, 16.0, 1, 1);
-        // collision_objects.push(floor2);
+        // addSpriteTileRow(&mut collision_objects, row1_sprite_idxs, 16.0, 32.0);
+        // addSpriteTileRow(&mut collision_objects, row2_sprite_idxs, 48.0, 32.0);
+        // addSpriteTileRow(&mut collision_objects, row3_sprite_idxs, 80.0, 32.0);
+        // addSpriteTileRow(&mut collision_objects, row4_sprite_idxs, 112.0, 32.0);
 
-        // let test_wall = AABB::new(32.0, 75.0, 160.0, 50.0); 
-        // let test_wall = newSpriteTile_Rect(W / 3.0, 100.0, 32.0, 64.0, 1, 1);
-        // collision_objects.push(test_wall);
-
-        let left_wall = newSpriteTile_Rect(8.0, H / 2.0, 16.0, H, 1, 1);
-        collision_objects.push(left_wall);
-
-        let right_wall = newSpriteTile_Rect(W - 8.0, H /2.0, 16.0, H, 1, 1);
-        collision_objects.push(right_wall);
-
+ 
         let font = engine::BitFont::with_sheet_region(
             '0'..='9',
             SheetRegion::new(0, 0, 512, 0, 80, 8),
             10,
         );
-        //vec![full_tile0, full_tile1, full_tile2, full_tile3, full_tile4, full_tile5, full_tile6, full_tile7, full_tile8, full_tile9, left_wall, right_wall, test_wall, floor, floor2]
+        
         Game {
             camera,
             guy,
             collision_objects,
-            apples: Vec::with_capacity(16),
-            apple_timer: 0,
+            // apples: Vec::with_capacity(16),
+            // apple_timer: 0,
             score: 0,
             font,
         }
     }
+
+
+
     fn update(&mut self, engine: &mut Engine) {
 
         // Character movement ------------------------------------------------------------------------
@@ -262,8 +297,15 @@ impl engine::Game for Game {
         self.guy.moveGuy(dir_x, dir_y);
         // Character movement ------------------------------------------------------------------------
 
-
         if engine.input.is_key_pressed(engine::Key::R) {
+            self.guy.pos = Vec2 {
+                x: W / 2.0,
+                y: 24.0,
+            }
+        }
+
+        if engine.input.is_key_pressed(engine::Key::L) {
+            loadLevel(&mut self.collision_objects, 0);
             self.guy.pos = Vec2 {
                 x: W / 2.0,
                 y: 24.0,
@@ -284,11 +326,12 @@ impl engine::Game for Game {
                 size: Vec2 { x: 16.0, y: 16.0 },
             };
             contacts.clear();
+
             // TODO: to generalize to multiple guys, need to iterate over guys first and have guy_index, rect_index, displacement in a contact tuple
+            
             contacts.extend(
-                self.collision_objects
+                    self.collision_objects
                     .iter()
-                    .filter(|tile| tile.tex_coord.0 != NO_COLLISION)
                     .enumerate()
                     .filter_map(|(ri, w)| w.collision.displacement(guy_aabb).map(|d| (ri, d))),
             );
@@ -301,16 +344,24 @@ impl engine::Game for Game {
                     .partial_cmp(&d1.length_squared())
                     .unwrap()
             });
-        
+            
+            
 
 
             for (wall_idx, _disp) in contacts.iter() {
+                
+                if(self.collision_objects[*wall_idx].tex_coord.0 == NO_COLLISION){
+                    continue;
+                }
+
                 // TODO: for multiple guys should access self.guys[guy_idx].
                 let guy_aabb = AABB {
                     center: self.guy.pos,
                     size: Vec2 { x: 16.0, y: 16.0 },
                 };
                 let wall = self.collision_objects[*wall_idx].collision;
+
+
                 let mut disp = wall.displacement(guy_aabb).unwrap_or(Vec2::ZERO);
                 
                 // We got to a basically zero collision amount
@@ -322,7 +373,7 @@ impl engine::Game for Game {
                 // Guy is below wall, push down
                 if self.guy.pos.y < wall.center.y {
                     disp.y *= -1.0;
-                }else if self.guy.pos.y > wall.center.y {
+                } else if self.guy.pos.y > wall.center.y {
                     disp.y *= 1.0;
                 }
 
@@ -343,7 +394,7 @@ impl engine::Game for Game {
                     self.guy.pos.y += disp.y;
                     self.guy.vel.y = 0.0;
 
-                    if(self.guy.vel.y <= 0.0) {
+                    if(self.guy.vel.y <= 0.0 && disp.y > 0.0) {
                         self.guy.grounded = true;
                     }
 
@@ -356,7 +407,7 @@ impl engine::Game for Game {
                     // so far it seems resolved; for multiple guys this should probably set a flag on the guy
                 }
 
-                println!("x vel: {}, y vel: {}", self.guy.vel.x , self.guy.vel.y );
+                // println!("x vel: {}, y vel: {}", self.guy.vel.x , self.guy.vel.y );
                 
 
                 
@@ -369,36 +420,7 @@ impl engine::Game for Game {
 
 
         
-        // Regerate apples ------------------------------------------------------------------------
-        let mut rng = rand::thread_rng();
-        if self.apple_timer > 0 {
-            self.apple_timer -= 1;
-        } else if self.apples.len() < 8 {
-            self.apples.push(Apple {
-                pos: Vec2 {
-                    x: rng.gen_range(8.0..(W - 8.0)),
-                    y: H + 8.0,
-                },
-                vel: Vec2 {
-                    x: 0.0,
-                    y: rng.gen_range((-4.0)..(-1.0)),
-                },
-            });
-            self.apple_timer = rng.gen_range(30..90);
-        }
-        for apple in self.apples.iter_mut() {
-            apple.pos += apple.vel;
-        }
-        if let Some(idx) = self
-            .apples
-            .iter()
-            .position(|apple| apple.pos.distance(self.guy.pos) <= CATCH_DISTANCE)
-        {
-            self.apples.swap_remove(idx);
-            self.score += 1;
-        }
-        self.apples.retain(|apple| apple.pos.y > -8.0)
-        // Regerate apples ------------------------------------------------------------------------
+        
     }
     
     
@@ -416,18 +438,8 @@ impl engine::Game for Game {
         // set bg image
         let (trfs1, uvs1) = engine.renderer.sprites.get_sprites_mut(TILE_SPRITE_GROUP);
         trfs1[0] = AABB::new(W /2.0, H /2.0, W, H).into();  // Create a non-collision AABB for use in the background
-        // AABB {
-        //     center: Vec2 {
-        //         x: W / 2.0,
-        //         y: H / 2.0,
-        //     },
-        //     size: Vec2 { x: W, y: H },
-        // }
-        // .into();
-        // Get the sprite from tiles at coords (1,2)
-        uvs1[0] = getSpriteFromSheet(TILE_SPRITE_GROUP as u16, 1, 2, 16, TILE_SIZE);
+        uvs1[0] = getSpriteFromSheet(TILE_SPRITE_GROUP as u16, &(0,1), 16, TILE_SIZE);
     
-        // SheetRegion::new(TILE_SPRITE_GROUP as u16, 1*TILE_SIZE, 2*TILE_SIZE, 16, TILE_SIZE, TILE_SIZE);
         
         
 
@@ -443,16 +455,10 @@ impl engine::Game for Game {
                 .zip(uvs1[WALL_START..guy_idx].iter_mut()),
         ) {
             *trf = (wall.collision).into();
-            // *uv = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, 0, 480, 12, 8, 8);
-            *uv = getSpriteFromSheet(TILE_SPRITE_GROUP as u16, wall.tex_coord.0, wall.tex_coord.1, 12, TILE_SIZE);
-            // SheetRegion::new(0, 0, 480, 12, 8, 8);
+            *uv = getSpriteFromSheet(TILE_SPRITE_GROUP as u16, &wall.tex_coord, 12, TILE_SIZE);
         }
 
         let (trfs, uvs) = engine.renderer.sprites.get_sprites_mut(DEMO_SPRITE_GROUP);
-
-
-
-
 
         // set guy
         trfs[guy_idx] = AABB {
@@ -463,47 +469,14 @@ impl engine::Game for Game {
         // TODO animation frame
         uvs[guy_idx] = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, 16, 480, 8, 16, 16);
         // SheetRegion::new(0, 16, 480, 8, 16, 16);
-        // set apple
-        let apple_start = guy_idx + 1;
-        for (apple, (trf, uv)) in self.apples.iter().zip(
-            trfs[apple_start..]
-                .iter_mut()
-                .zip(uvs[apple_start..].iter_mut()),
-        ) {
-            *trf = AABB {
-                center: apple.pos,
-                size: Vec2 { x: 16.0, y: 16.0 },
-            }
-            .into();
-            *uv = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, 0, 496, 4, 16, 16);
-            //SheetRegion::new(0, 0, 496, 4, 16, 16);
-        }
-        let sprite_count = apple_start + self.apples.len();
-        let score_str = self.score.to_string();
-        let text_len = score_str.len();
-        engine.renderer.sprites.resize_sprite_group(
-            &engine.renderer.gpu,
-            0,
-            sprite_count + text_len,
-        );
-        self.font.draw_text(
-            &mut engine.renderer.sprites,
-            0,
-            sprite_count,
-            &score_str,
-            Vec2 {
-                x: 16.0,
-                y: H - 16.0,
-            }
-            .into(),
-            16.0,
-        );
+        
+        
 
 
         engine
             .renderer
             .sprites
-            .upload_sprites(&engine.renderer.gpu, DEMO_SPRITE_GROUP, 0..sprite_count + text_len);
+            .upload_sprites(&engine.renderer.gpu, DEMO_SPRITE_GROUP, 0..WALL_START + self.collision_objects.len() + 1);
         engine
             .renderer
             .sprites
