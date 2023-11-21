@@ -97,4 +97,12 @@ impl AABB {
     pub fn displacement(&self, other: AABB) -> Option<Vec2> {
         Rect::from(*self).displacement(Rect::from(other))
     }
+
+    pub fn new(x:f32, y:f32, w:f32, h:f32) -> Self {
+        AABB {
+            center: Vec2::new(x, y), 
+            size: Vec2::new(w, h),
+        }
+    }
+
 }
