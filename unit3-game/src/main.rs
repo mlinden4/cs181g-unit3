@@ -64,6 +64,11 @@ struct Apple {
     vel: Vec2,
 }
 
+struct Door {
+    pos: Vec2,
+    open: bool,
+}
+
 struct SpriteTile {
     collision: AABB,
     tex_coord: (u16, u16),
@@ -72,12 +77,13 @@ struct SpriteTile {
 struct Game {
     camera: engine::Camera,
     collision_objects: Vec<SpriteTile>,
-    doors: Vec<SpriteTile>,
+    doors: Vec<Door>,
     guy: Guy,
     apples: Vec<Apple>,
     apple_timer: u32,
     score: u32,
     font: engine_simple::BitFont,
+    game_mode: u32,
 }
 
 
@@ -233,9 +239,14 @@ impl engine::Game for Game {
         let right_wall = newSpriteTile_Rect(W - 8.0, H /2.0, 16.0, H, 1, 1);
         collision_objects.push(right_wall);
 
-        let mut doors: Vec<SpriteTile> = Vec::default(); 
-        let door1 = newSpriteTile_Rect(0.0, 0.0, 2.81, 4.64, 2, 1);
-        doors.push(door1);
+        let mut doors: Vec<Door> = Vec::default(); 
+        doors.push(Door {
+            pos: Vec2 {
+                x: W - W/5.0,
+                y: H/3.0,
+            },
+            open: false,
+        });
 
         let font = engine::BitFont::with_sheet_region(
             '0'..='9',
@@ -252,6 +263,7 @@ impl engine::Game for Game {
             apple_timer: 0,
             score: 0,
             font,
+            game_mode: 0,
         }
     }
     fn update(&mut self, engine: &mut Engine) {
@@ -333,8 +345,15 @@ impl engine::Game for Game {
                 } else if self.guy.pos.x > wall.center.x {
                     disp.x *= 1.0;
                 }
-
-                
+                // Guy is touching door, change door and hide all sprites.
+                if let Some(idx) = self
+                    .doors
+                    .iter()
+                    .position(|door| door.pos.distance(self.guy.pos) <= CATCH_DISTANCE)
+                {
+                    self.doors[idx].open = true;
+                    self.game_mode = 1; // switch to mini-game 1
+                }
                 if disp.y.abs() <= disp.x.abs(){
                     
                     // Guy is above wall, push up
