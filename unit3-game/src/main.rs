@@ -5,9 +5,11 @@ use engine_simple as engine;
 use engine_simple::wgpu;
 use engine_simple::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use rand::Rng;
-use std::os::unix::fs::FileTypeExt;
+use std::f32::RADIX;
+use std::os::windows::fs::FileTypeExt;
 use std::path::Path;
 use std::fs::read_to_string;
+use std::{thread, time};
 
 const W: f32 = 320.0;
 const H: f32 = 240.0;
@@ -21,12 +23,13 @@ const NO_COLLISION: u16 = 9;
 const TOP_HALF_COLLISION: [(u16, u16); 4] = [(0, 3), (1, 3), (2, 3), (3, 3)];
 const BOT_HALF_COLLISION: [(u16, u16); 2] = [(0,0), (2,2)];
 const DEATH_COLLISION: [(u16, u16); 2] = [(0,0), (2,2)];
+const DOOR_COLLISION: [(u16, u16); 6] = [(6,0), (6,1), (6,2), (6,3), (5,3), (5,4)];
 
 
 // const LEFT: &'static [&'static str] = &["Hello", "World", "!"];
 
 const TILE_SIZE: u16 = 256;
-const TILE_SHEET_W: u16 = 6 * TILE_SIZE;
+const TILE_SHEET_W: u16 = 7 * TILE_SIZE;
 const TILE_SHEET_H: u16 = 5 * TILE_SIZE;
 
 struct Guy {
@@ -92,12 +95,14 @@ struct SpriteTile {
 struct Game {
     camera: engine::Camera,
     collision_objects: Vec<SpriteTile>,
+    doors: Vec<u16>,
     guy: Guy,
     score: u32,
     font: engine_simple::BitFont,
+    level:u32,
 }
 
-fn loadLevel(collision_objects: &mut Vec<SpriteTile>, num: u16){
+fn loadLevel(collision_objects: &mut Vec<SpriteTile>, doors: &mut Vec<u16>, num: u16){
 
     let mut x_pos: f32 = 16.0;
     let mut y_pos: f32 = 16.0;
@@ -124,9 +129,14 @@ fn loadLevel(collision_objects: &mut Vec<SpriteTile>, num: u16){
     let mut tex_coords: Vec<(u16,u16)> = Vec::default();
 
     for str_tex_coord in segments {
-        let parts: Vec<&str> = str_tex_coord.split(',').collect();
-        tex_coords.push((parts[0].parse().unwrap(), parts[1].parse().unwrap()));
+        let s: String = String::from(str_tex_coord);
+        if s.chars().nth(0).unwrap().is_ascii_digit(){
+            println!("tex_coords: {}, {}", s.chars().nth(0).unwrap(), s.chars().nth(2).unwrap());
+            tex_coords.push((s.chars().nth(0).unwrap() as u16 - 48, s.chars().nth(2).unwrap() as u16 - 48));
+        }
+        
     }
+    println!("{:?}", tex_coords);
 
 
     for tex_coord in tex_coords {
@@ -136,6 +146,9 @@ fn loadLevel(collision_objects: &mut Vec<SpriteTile>, num: u16){
             collision_objects.push(newSpriteTile_Rect(x_pos, y_pos + (size/4.0), size, size/2.0, tex_coord.0, tex_coord.1));
         }else if(BOT_HALF_COLLISION.contains(&tex_coord)){
             collision_objects.push(newSpriteTile_Rect(x_pos, y_pos - (size/4.0), size, size/2.0, tex_coord.0, tex_coord.1));
+        }else if(DOOR_COLLISION.contains(&tex_coord)){
+            doors.push(collision_objects.len() as u16);
+            collision_objects.push(newSpriteTile_Square(x_pos, y_pos, size, tex_coord.0, tex_coord.1));
         }else{
             collision_objects.push(newSpriteTile_Square(x_pos, y_pos, size, tex_coord.0, tex_coord.1));
         }
@@ -147,7 +160,6 @@ fn loadLevel(collision_objects: &mut Vec<SpriteTile>, num: u16){
             x_pos += size;
         }
     }
-    
     // collision_objects.reverse();
 
 }
@@ -221,6 +233,8 @@ fn getSpriteFromSheet(sheet_num: u16, tex_coord: &(u16,u16), depth: u16, sprite_
     }
 }
 
+
+
 // Meant to just get it directly based on data
 fn getSpriteFromSheet_Demo(sheet_num: u16, x: u16, y: u16, depth: u16, w: u16, h: u16) -> SheetRegion {
     SheetRegion::new(sheet_num, x, y, depth, w, h)
@@ -242,8 +256,9 @@ impl engine::Game for Game {
                 .into_rgba8()
         };
         #[cfg(not(target_arch = "wasm32"))]
-        newSpriteGroup("content/demo.png", engine, &camera); // 0
-        newSpriteGroup("content/Tiles/tile_sheet.png", engine, &camera); // 1
+        newSpriteGroup("content/Swordsman/Idle.png", engine, &camera); // 0
+        newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 1
+        //newSpriteGroup("content/Objects/DoorUnlocked.png", engine, &camera); // 2
 
         let guy = Guy {
             pos: Vec2 {
@@ -260,8 +275,8 @@ impl engine::Game for Game {
         
         
         let mut collision_objects: Vec<SpriteTile> = Vec::default(); 
-        loadLevel(&mut collision_objects, 0);
-
+        let mut doors: Vec<u16> = Vec::default(); 
+        loadLevel(&mut collision_objects, &mut doors, 0);
 
 
         //              size_x
@@ -292,10 +307,12 @@ impl engine::Game for Game {
             camera,
             guy,
             collision_objects,
+            doors,
             // apples: Vec::with_capacity(16),
             // apple_timer: 0,
             score: 0,
             font,
+            level: 0,
         }
     }
 
@@ -315,7 +332,8 @@ impl engine::Game for Game {
         }
 
         if engine.input.is_key_pressed(engine::Key::L) {
-            loadLevel(&mut self.collision_objects, 0);
+            self.level = 0;
+            loadLevel(&mut self.collision_objects, &mut self.doors, 0);
             self.guy.die();
         }
 
@@ -352,75 +370,124 @@ impl engine::Game for Game {
                     .partial_cmp(&d1.length_squared())
                     .unwrap()
             });
+            let x_tex_region = (guy_aabb.center.x);//TILE_SIZE as f32) as u16;
+            println!("{}, {}", x_tex_region, guy_aabb.center.y);
+            // check if guy collides with doors
+            if guy_aabb.center.x > 250.0 && guy_aabb.center.x <= 300.0  && self.level == 0{
+                if guy_aabb.center.y > 70.0 && guy_aabb.center.y < 150.0{
+                    //bottom door collision
+                    self.level = 1;
+                    self.collision_objects.clear();
+                    loadLevel(&mut self.collision_objects, &mut self.doors, 1);
+                } else if guy_aabb.center.y < 215.0 && guy_aabb.center.y > 165.0{
+                    //top door collision
+                    self.level = 3;
+                    self.collision_objects.clear();
+                    loadLevel(&mut self.collision_objects, &mut self.doors, 3);
+                }
+            }
+            
+            if self.level == 1 || self.level == 3{
+                // bottom door open
+                if engine.input.is_key_pressed(engine::Key::Space) {
+                    self.level = 2;
+                    self.collision_objects.clear();
+                    loadLevel(&mut self.collision_objects, &mut self.doors, 2);
+                }
+            }
+            
+            if self.level == 2{
+                // mini game 1 
+                if engine.input.is_key_pressed(engine::Key::Escape) {
+                    self.level = 0;
+                    self.guy = Guy {
+                        pos: Vec2 {
+                            x: W / 2.0,
+                            y: H / 2.0,
+                        },
+                        vel: Vec2 {
+                            x: 0.0,
+                            y: 0.0,
+                        },
+                        grounded: false,
+                    };
+                    self.collision_objects.clear();
+                    loadLevel(&mut self.collision_objects, &mut self.doors, 0);
+                }
+            }
             
             
 
 
             for (wall_idx, _disp) in contacts.iter() {
-                
-                if(self.collision_objects[*wall_idx].tex_coord.0 == NO_COLLISION){
-                    continue;
-                }
+                if !self.doors.contains(&(*wall_idx as u16)){
 
-                if(DEATH_COLLISION.contains(&self.collision_objects[*wall_idx].tex_coord)){
-                    self.guy.die();
-                }
-
-                // TODO: for multiple guys should access self.guys[guy_idx].
-                let guy_aabb = AABB {
-                    center: self.guy.pos,
-                    size: Vec2 { x: 16.0, y: 16.0 },
-                };
-                let wall = self.collision_objects[*wall_idx].collision;
-
-
-                let mut disp = wall.displacement(guy_aabb).unwrap_or(Vec2::ZERO);
-                
-                // We got to a basically zero collision amount
-                if disp.x.abs() < std::f32::EPSILON || disp.y.abs() < std::f32::EPSILON {
-                    break;
-                }
-                
-
-                // Guy is below wall, push down
-                if self.guy.pos.y < wall.center.y {
-                    disp.y *= -1.0;
-                } else if self.guy.pos.y > wall.center.y {
-                    disp.y *= 1.0;
-                }
-
-                // Guy is left of wall, push left
-                if self.guy.pos.x < wall.center.x {
-                    disp.x *= -1.0;
-
-                // Guy is right of wall, push left
-                } else if self.guy.pos.x > wall.center.x {
-                    disp.x *= 1.0;
-                }
-
-                
-                if disp.y.abs() <= disp.x.abs(){
                     
-                    // Guy is above wall, push up
+                    if(self.collision_objects[*wall_idx].tex_coord.0 == NO_COLLISION){
+                        continue;
+                    }
 
-                    self.guy.pos.y += disp.y;
-                    self.guy.vel.y = 0.0;
-
-                    if(self.guy.vel.y <= 0.0 && disp.y > 0.0) {
-                        self.guy.grounded = true;
+                    if(DEATH_COLLISION.contains(&self.collision_objects[*wall_idx].tex_coord)){
+                        self.guy.die();
                     }
 
                     
-                    // so far it seems resolved; for multiple guys this should probably set a flag on the guy
-                }else if  disp.x.abs() <= disp.y.abs() {
-                    self.guy.pos.x += disp.x;
-                    self.guy.vel.x = 0.0;
-                    
-                    // so far it seems resolved; for multiple guys this should probably set a flag on the guy
-                }
 
-                // println!("x vel: {}, y vel: {}", self.guy.vel.x , self.guy.vel.y );
-                
+                    // TODO: for multiple guys should access self.guys[guy_idx].
+                    let guy_aabb = AABB {
+                        center: self.guy.pos,
+                        size: Vec2 { x: 16.0, y: 16.0 },
+                    };
+                    let wall = self.collision_objects[*wall_idx].collision;
+
+
+                    let mut disp = wall.displacement(guy_aabb).unwrap_or(Vec2::ZERO);
+                    
+                    // We got to a basically zero collision amount
+                    if disp.x.abs() < std::f32::EPSILON || disp.y.abs() < std::f32::EPSILON {
+                        break;
+                    }
+                    
+
+                    // Guy is below wall, push down
+                    if self.guy.pos.y < wall.center.y {
+                        disp.y *= -1.0;
+                    } else if self.guy.pos.y > wall.center.y {
+                        disp.y *= 1.0;
+                    }
+
+                    // Guy is left of wall, push left
+                    if self.guy.pos.x < wall.center.x {
+                        disp.x *= -1.0;
+
+                    // Guy is right of wall, push left
+                    } else if self.guy.pos.x > wall.center.x {
+                        disp.x *= 1.0;
+                    }
+
+                    
+                    if disp.y.abs() <= disp.x.abs(){
+                        
+                        // Guy is above wall, push up
+
+                        self.guy.pos.y += disp.y;
+                        self.guy.vel.y = 0.0;
+
+                        if(self.guy.vel.y <= 0.0 && disp.y > 0.0) {
+                            self.guy.grounded = true;
+                        }
+
+                        
+                        // so far it seems resolved; for multiple guys this should probably set a flag on the guy
+                    }else if  disp.x.abs() <= disp.y.abs() {
+                        self.guy.pos.x += disp.x;
+                        self.guy.vel.x = 0.0;
+                        
+                        // so far it seems resolved; for multiple guys this should probably set a flag on the guy
+                    }
+
+                    // println!("x vel: {}, y vel: {}", self.guy.vel.x , self.guy.vel.y );
+                }    
 
                 
             }
@@ -441,7 +508,7 @@ impl engine::Game for Game {
         
         let DEMO_SPRITE_GROUP = 0;
         let TILE_SPRITE_GROUP = 1;
-        
+
 
         // [idx 0, idx 1..guy_idx, guy_idx, apple_start..)]
         // [Background, walls..., guy, apples...]
@@ -479,12 +546,12 @@ impl engine::Game for Game {
         }
         .into();
         // TODO animation frame
-        uvs[guy_idx] = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, 16, 480, 8, 16, 16);
+        uvs[guy_idx] = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, 16, 64, 8, 70, 70);
         // SheetRegion::new(0, 16, 480, 8, 16, 16);
         
         
 
-
+        
         engine
             .renderer
             .sprites
@@ -493,6 +560,7 @@ impl engine::Game for Game {
             .renderer
             .sprites
             .upload_sprites(&engine.renderer.gpu, TILE_SPRITE_GROUP, 0..self.collision_objects.len() + 1);
+    
         engine
             .renderer
             .sprites
