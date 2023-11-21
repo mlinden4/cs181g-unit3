@@ -20,6 +20,8 @@ const NO_COLLISION: u16 = 9;
 
 const TOP_HALF_COLLISION: [(u16, u16); 4] = [(0, 3), (1, 3), (2, 3), (3, 3)];
 const BOT_HALF_COLLISION: [(u16, u16); 2] = [(0,0), (2,2)];
+const DEATH_COLLISION: [(u16, u16); 2] = [(0,0), (2,2)];
+
 
 // const LEFT: &'static [&'static str] = &["Hello", "World", "!"];
 
@@ -32,6 +34,7 @@ struct Guy {
     vel: Vec2,
     grounded: bool,
 }
+
 
 impl Guy {
 
@@ -64,6 +67,14 @@ impl Guy {
         // Update positon
         self.pos.x += self.vel.x;
         self.pos.y += self.vel.y;
+    }
+
+    fn die(&mut self){
+        self.pos = Vec2 {
+            x: W / 2.0,
+            y: H / 4.0,
+        }
+        
     }
 
 }
@@ -245,6 +256,8 @@ impl engine::Game for Game {
             },
             grounded: false,
         };
+
+        
         
         let mut collision_objects: Vec<SpriteTile> = Vec::default(); 
         loadLevel(&mut collision_objects, 0);
@@ -298,18 +311,12 @@ impl engine::Game for Game {
         // Character movement ------------------------------------------------------------------------
 
         if engine.input.is_key_pressed(engine::Key::R) {
-            self.guy.pos = Vec2 {
-                x: W / 2.0,
-                y: 24.0,
-            }
+            self.guy.die();
         }
 
         if engine.input.is_key_pressed(engine::Key::L) {
             loadLevel(&mut self.collision_objects, 0);
-            self.guy.pos = Vec2 {
-                x: W / 2.0,
-                y: 24.0,
-            }
+            self.guy.die();
         }
 
 
@@ -333,8 +340,9 @@ impl engine::Game for Game {
                     self.collision_objects
                     .iter()
                     .enumerate()
-                    .filter_map(|(ri, w)| w.collision.displacement(guy_aabb).map(|d| (ri, d))),
+                    .filter_map(|(ri, w)| w.collision.displacement(guy_aabb).map(|d| (ri, d)))
             );
+
             if contacts.is_empty() {
                 break;
             }
@@ -352,6 +360,10 @@ impl engine::Game for Game {
                 
                 if(self.collision_objects[*wall_idx].tex_coord.0 == NO_COLLISION){
                     continue;
+                }
+
+                if(DEATH_COLLISION.contains(&self.collision_objects[*wall_idx].tex_coord)){
+                    self.guy.die();
                 }
 
                 // TODO: for multiple guys should access self.guys[guy_idx].
