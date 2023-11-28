@@ -137,18 +137,18 @@ pub fn loadLevel(collision_objects: &mut Vec<SpriteTile>, doors: &mut Vec<u16>, 
     for tex_coord in tex_coords {
 
 
-        if(TOP_HALF_COLLISION.contains(&tex_coord)){
+        if TOP_HALF_COLLISION.contains(&tex_coord) {
             collision_objects.push(newSpriteTile_Rect(x_pos, y_pos + (size/4.0), size, size/2.0, tex_coord.0, tex_coord.1));
-        }else if(BOT_HALF_COLLISION.contains(&tex_coord)){
+        }else if BOT_HALF_COLLISION.contains(&tex_coord) {
             collision_objects.push(newSpriteTile_Rect(x_pos, y_pos - (size/4.0), size, size/2.0, tex_coord.0, tex_coord.1));
-        }else if(DOOR_COLLISION.contains(&tex_coord)){
+        }else if DOOR_COLLISION.contains(&tex_coord) {
             doors.push(collision_objects.len() as u16);
             collision_objects.push(newSpriteTile_Square(x_pos, y_pos, size, tex_coord.0, tex_coord.1));
         }else{
             collision_objects.push(newSpriteTile_Square(x_pos, y_pos, size, tex_coord.0, tex_coord.1));
         }
         
-        if(x_pos == 16.0 + size * 9.0){
+        if x_pos == 16.0 + size * 9.0 {
             x_pos = 16.0;
             y_pos += size;
         }else{
@@ -260,11 +260,11 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
                 if !game.doors.contains(&(*wall_idx as u16)){
 
                     
-                    if(game.collision_objects[*wall_idx].tex_coord.0 == NO_COLLISION){
+                    if game.collision_objects[*wall_idx].tex_coord.0 == NO_COLLISION {
                         continue;
                     }
 
-                    if(DEATH_COLLISION.contains(&game.collision_objects[*wall_idx].tex_coord)){
+                    if DEATH_COLLISION.contains(&game.collision_objects[*wall_idx].tex_coord) {
                         game.guy.die();
                     }
 
@@ -310,13 +310,13 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
                         game.guy.pos.y += disp.y;
                         game.guy.vel.y = 0.0;
 
-                        if(game.guy.vel.y <= 0.0 && disp.y > 0.0) {
+                        if game.guy.vel.y <= 0.0 && disp.y > 0.0 {
                             game.guy.grounded = true;
                         }
 
                         
                         // so far it seems resolved; for multiple guys this should probably set a flag on the guy
-                    }else if  disp.x.abs() <= disp.y.abs() {
+                    }else if disp.x.abs() <= disp.y.abs() {
                         game.guy.pos.x += disp.x;
                         game.guy.vel.x = 0.0;
                         
