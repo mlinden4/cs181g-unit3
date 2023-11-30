@@ -11,6 +11,7 @@ engine-simple = {path="../engine-simple"}
 winit = "0.28"
 rand = "0.8"
 image = {version="0.24.7", features=["png"]}
+bytemuck = "1.14.0"
 
 [features]
 default = []

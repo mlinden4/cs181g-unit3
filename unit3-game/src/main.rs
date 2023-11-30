@@ -13,6 +13,7 @@ use std::fs::read_to_string;
 use std::{thread, time};
 
 mod platformer;
+mod simonsays;
 
 const W: f32 = 320.0;
 const H: f32 = 240.0;
@@ -44,6 +45,7 @@ pub struct Game {
     guy: platformer::Guy,
     level:u32,
     mode: GameMode,
+    simon_says_objects: Vec<SpriteTile>,
 
 }
 
@@ -91,6 +93,21 @@ fn getSpriteFromSheet_Demo(sheet_num: u16, x: u16, y: u16, depth: u16, w: u16, h
     SheetRegion::new(sheet_num, x, y, depth, w, h)
 }
 
+fn newSpriteTile_Square(pos_x: f32, pos_y: f32, size: f32, tex_x: u16, tex_y: u16) -> SpriteTile {
+    SpriteTile {
+        collision: AABB::new(pos_x, pos_y, size, size),
+        tex_coord: (tex_x, tex_y),
+    }
+}
+
+
+fn newSpriteTile_Rect(pos_x: f32, pos_y: f32, width: f32, height: f32, tex_x: u16, tex_y: u16) -> SpriteTile {
+    SpriteTile {
+        collision: AABB::new(pos_x, pos_y, width, height),
+        tex_coord: (tex_x, tex_y),
+    }
+}
+
 impl engine::Game for Game {
 
     fn new(engine: &mut Engine) -> Self {
@@ -108,7 +125,8 @@ impl engine::Game for Game {
         };
         #[cfg(not(target_arch = "wasm32"))]
         newSpriteGroup("content/Swordsman/Idle.png", engine, &camera); // 0
-        newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 1
+        newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 1 (for platformer)
+        newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 2 (for simon says)
         //newSpriteGroup("content/Objects/DoorUnlocked.png", engine, &camera); // 2
 
         let guy = platformer::Guy {
@@ -130,6 +148,10 @@ impl engine::Game for Game {
         platformer::loadLevel(&mut collision_objects, &mut doors, 0);
 
 
+        let mut simon_says_objects: Vec<SpriteTile> = Vec::default();
+        simonsays::initialize(&mut simon_says_objects);
+
+
         //              size_x
         //            --------------
         //   size_y   | c_xy x     |
@@ -148,7 +170,8 @@ impl engine::Game for Game {
             collision_objects,
             doors,
             level: 0,
-            mode: GameMode::Platformer
+            mode: GameMode::Platformer,
+            simon_says_objects,
         }
     }
 
@@ -159,10 +182,9 @@ impl engine::Game for Game {
         match self.mode {
             GameMode::Platformer => platformer::update_platformer(self, engine),
             GameMode::ConnectWires => (),
-            GameMode::SimonSays => (),
+            GameMode::SimonSays => simonsays::update_simon_says(self, engine),
         }
         
-
     }
     
     
@@ -172,7 +194,7 @@ impl engine::Game for Game {
         match self.mode {
             GameMode::Platformer => platformer::render_platformer(self, engine),
             GameMode::ConnectWires => (),
-            GameMode::SimonSays => (),
+            GameMode::SimonSays => simonsays::render_simon_says(self, engine),
         }
         
     }

@@ -9,8 +9,9 @@ use std::f32::RADIX;
 use std::path::Path;
 use std::fs::read_to_string;
 use std::{thread, time};
+// use bytemuck::{Pod, Zeroable};
 
-use crate::{SpriteTile, Game, getSpriteFromSheet, getSpriteFromSheet_Demo};
+use crate::{SpriteTile, Game, getSpriteFromSheet, getSpriteFromSheet_Demo, GameMode, newSpriteTile_Rect, newSpriteTile_Square};
 
 const W: f32 = 320.0;
 const H: f32 = 240.0;
@@ -82,20 +83,7 @@ impl Guy {
 
 
 
-fn newSpriteTile_Square(pos_x: f32, pos_y: f32, size: f32, tex_x: u16, tex_y: u16) -> SpriteTile {
-    SpriteTile {
-        collision: AABB::new(pos_x, pos_y, size, size),
-        tex_coord: (tex_x, tex_y),
-    }
-}
 
-
-fn newSpriteTile_Rect(pos_x: f32, pos_y: f32, width: f32, height: f32, tex_x: u16, tex_y: u16) -> SpriteTile {
-    SpriteTile {
-        collision: AABB::new(pos_x, pos_y, width, height),
-        tex_coord: (tex_x, tex_y),
-    }
-}
 
 pub fn loadLevel(collision_objects: &mut Vec<SpriteTile>, doors: &mut Vec<u16>, num: u16){
 
@@ -176,6 +164,15 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
             game.level = 0;
             loadLevel(&mut game.collision_objects, &mut game.doors, 0);
             game.guy.die();
+        }
+
+        if engine.input.is_key_pressed(engine::Key::S) {
+            game.mode = GameMode::SimonSays;
+            if !matches!(game.mode, GameMode::Platformer) {
+                // game.camera.screen_pos = [500.0, 500.0];
+                println!("here");
+                render_platformer(game, engine);
+            }
         }
 
 
@@ -363,6 +360,11 @@ pub fn render_platformer(game: &mut Game, engine: &mut Engine) {
         *uv = getSpriteFromSheet(TILE_SPRITE_GROUP as u16, &wall.tex_coord, 12, TILE_SIZE);
     }
 
+    if !matches!(game.mode, GameMode::Platformer) {
+        println!("here render 1");
+        trfs1.fill(Transform::zeroed());
+    }
+
     let (trfs, uvs) = engine.renderer.sprites.get_sprites_mut(DEMO_SPRITE_GROUP);
 
     // set guy
@@ -375,7 +377,12 @@ pub fn render_platformer(game: &mut Game, engine: &mut Engine) {
     uvs[guy_idx] = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, 16, 64, 8, 70, 70);
     // SheetRegion::new(0, 16, 480, 8, 16, 16);
     
-    
+
+    println!("hello");
+    if !matches!(game.mode, GameMode::Platformer) {
+        println!("here render 1");
+        trfs.fill(Transform::zeroed());
+    }
 
     
     engine
@@ -386,7 +393,6 @@ pub fn render_platformer(game: &mut Game, engine: &mut Engine) {
         .renderer
         .sprites
         .upload_sprites(&engine.renderer.gpu, TILE_SPRITE_GROUP, 0..game.collision_objects.len() + 1);
-
     engine
         .renderer
         .sprites
