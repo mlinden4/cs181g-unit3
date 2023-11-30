@@ -111,19 +111,12 @@ fn newSpriteTile_Rect(pos_x: f32, pos_y: f32, width: f32, height: f32, tex_x: u1
 impl engine::Game for Game {
 
     fn new(engine: &mut Engine) -> Self {
+        
         let camera = Camera {
             screen_pos: [0.0, 0.0],
             screen_size: [W, H],
         };
-        #[cfg(target_arch = "wasm32")]
-        let sprite_img = {
-            let img_bytes = include_bytes!("content/demo.png");
-            image::load_from_memory_with_format(&img_bytes, image::ImageFormat::Png)
-                .map_err(|e| e.to_string())
-                .unwrap()
-                .into_rgba8()
-        };
-        #[cfg(not(target_arch = "wasm32"))]
+        
         newSpriteGroup("content/Swordsman/Idle.png", engine, &camera); // 0
         newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 1 (for platformer)
         newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 2 (for simon says)
