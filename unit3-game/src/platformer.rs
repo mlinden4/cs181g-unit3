@@ -378,9 +378,7 @@ pub fn render_platformer(game: &mut Game, engine: &mut Engine) {
     // SheetRegion::new(0, 16, 480, 8, 16, 16);
     
 
-    println!("hello");
     if !matches!(game.mode, GameMode::Platformer) {
-        println!("here render 1");
         trfs.fill(Transform::zeroed());
     }
 

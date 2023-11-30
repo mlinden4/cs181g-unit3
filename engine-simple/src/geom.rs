@@ -105,4 +105,11 @@ impl AABB {
         }
     }
 
+    pub fn contains(&self, x: f32, y: f32) -> bool{
+        let in_horz = (self.center.x - (self.size.x / 2.0) < x) && (self.center.x + (self.size.x / 2.0) >= x);
+        let in_vert = (self.center.y - (self.size.y / 2.0) < y) && (self.center.y + (self.size.y / 2.0) >= y);
+        
+        in_horz && in_vert
+    }
+
 }

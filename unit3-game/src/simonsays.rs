@@ -46,21 +46,36 @@ pub fn initialize(simon_says_objects: &mut Vec<SpriteTile>){
 
 pub fn update_simon_says(game: &mut Game, engine: &mut Engine){
     
-    if engine.input.is_mouse_down(winit::event::MouseButton::Left) {
+    if engine.input.is_mouse_pressed(winit::event::MouseButton::Left) {
         // TODO screen -> multicord needed
+
+        let scaling_factor: f32 = 5.0;
+            
+        let window_height = engine.renderer.gpu.config.height as f32;
+        let window_witdh = engine.renderer.gpu.config.width as f32;
+
         let mouse_pos = engine.input.mouse_pos();
         // Normalize mouse clicks to be 00 at bottom left corner
-        let (x_norm, y_norm) = ((mouse_pos.x as f32 + game.camera.screen_pos[0]),
-                                ((mouse_pos.y as f32 - game.camera.screen_size[1]) * (-1.0 as f32)) + game.camera.screen_pos[1]);
+        let (x_norm, y_norm) = ((mouse_pos.x as f32 + game.camera.screen_pos[0])/scaling_factor,
+                                (((mouse_pos.y as f32 - window_height) * (-1.0 as f32)) + game.camera.screen_pos[1])/scaling_factor);
 
-        println!("x: {}, y: {}", x_norm, y_norm);
+
+        for ss_object in game.simon_says_objects.iter() {
+            if(ss_object.collision.contains(x_norm, y_norm)){
+                println!{"({},{})", ss_object.tex_coord.0, ss_object.tex_coord.1};
+            }else{
+                // println!("no selection");
+            }
+        }
+
+
     }
 
     if engine.input.is_key_pressed(engine::Key::S) {
         game.mode = GameMode::Platformer;
         if !matches!(game.mode, GameMode::SimonSays) {
             println!("here");
-            render_simon_says(game, engine);
+            render_simon_says(game, engine)
         }
     }
 
@@ -100,9 +115,7 @@ pub fn render_simon_says(game: &mut Game, engine: &mut Engine) {
     }
 
 
-    println!("hello");
     if !matches!(game.mode, GameMode::SimonSays) {
-        println!("here render 1");
         trfs1.fill(Transform::zeroed());
     }
 
