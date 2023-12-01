@@ -15,7 +15,7 @@ use crate::{SpriteTile, Game, getSpriteFromSheet, getSpriteFromSheet_Demo, GameM
 
 const W: f32 = 320.0;
 const H: f32 = 240.0;
-const GUY_HORZ_SPEED: f32 = 4.0;
+const GUY_HORZ_SPEED: f32 = 2.5; //4.0
 const COLLISION_STEPS: usize = 3;
 const GRAVITY: f32 = 1.0;
 const NO_COLLISION: u16 = 9;
@@ -25,6 +25,13 @@ const BOT_HALF_COLLISION: [(u16, u16); 2] = [(0,0), (2,2)];
 const DEATH_COLLISION: [(u16, u16); 2] = [(0,0), (2,2)];
 const DOOR_COLLISION: [(u16, u16); 6] = [(6,0), (6,1), (6,2), (6,3), (5,3), (5,4)];
 
+// Each sprite is 128.5 wide and 130 tall but lots of blank space around character.
+// index 0-7 walking to the right
+// index 8-15 walking to the left
+// index 16-20 is idle
+const GUY_FRAMES: [(u16, u16); 26]= [(0, 390), (128, 390), (256, 390), (384, 390), (512, 390), (640, 390), (769, 390), (898, 390), 
+                                    (0, 520), (128, 520), (256, 520), (385, 520), (513, 520), (641, 520), (769, 520), (898, 520),
+                                    (0, 260), (0, 260), (128, 260), (128, 260), (256, 260), (256, 260), (385, 260), (385, 260), (0, 260), (0, 260)];
 
 // const LEFT: &'static [&'static str] = &["Hello", "World", "!"];
 
@@ -35,6 +42,7 @@ pub struct Guy {
     pub pos: Vec2,
     pub vel: Vec2,
     pub grounded: bool,
+    pub frame: usize,
 }
 
 
@@ -69,6 +77,34 @@ impl Guy {
         // Update positon
         self.pos.x += self.vel.x;
         self.pos.y += self.vel.y;
+
+        //Handle animation
+        if horz_dir == 0.0 || vert_dir != 0.0{
+            // use idle frames when still or jumping
+            // delay frames are frames to make the idle look better after 20
+            if self.frame == 25 || self.frame < 16{
+                // restart animation
+                self.frame = 16;
+            }else{
+                self.frame += 1;
+            }
+        }else if horz_dir > 0.0 {
+            // if walking to the right
+            if self.frame == 7 || self.frame > 8 {
+                // if frames recycle OR was not previously walking right
+                self.frame = 0;
+            }else{
+                self.frame += 1;
+            }
+        }else if horz_dir < 0.0{
+            // if walking to the left
+            if self.frame == 15 || self.frame > 15 || self.frame < 7{
+                // if frames recycle OR was not previously walking left
+                self.frame = 8;
+            }else{
+                self.frame += 1;
+            }
+        }
     }
 
     fn die(&mut self){
@@ -152,7 +188,7 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
         // Character movement ------------------------------------------------------------------------
         let dir_x = engine.input.key_axis(engine::Key::Left, engine::Key::Right);
         let dir_y = engine.input.key_axis(engine::Key::Down, engine::Key::Up);
-
+        println!("dirx: {}, diry: {}", dir_x, dir_y);
         game.guy.moveGuy(dir_x, dir_y);
         // Character movement ------------------------------------------------------------------------
 
@@ -218,7 +254,7 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
                     game.level = 3;
                     game.collision_objects.clear();
                     loadLevel(&mut game.collision_objects, &mut game.doors, 3);
-                }
+                } 
             }
             
             if game.level == 1 {
@@ -226,6 +262,11 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
                     game.mode = GameMode::SimonSays;
                     render_platformer(game, engine);
                     return;
+                }else if guy_aabb.center.x < 250.0 {
+                    //door close, guy left doorway
+                    game.level = 0;
+                    game.collision_objects.clear();
+                    loadLevel(&mut game.collision_objects, &mut game.doors, 0);
                 }
             }
 
@@ -235,6 +276,11 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
                     game.level = 2;
                     game.collision_objects.clear();
                     loadLevel(&mut game.collision_objects, &mut game.doors, 2);
+                }else if guy_aabb.center.x < 250.0 {
+                    //door close, guy left doorway
+                    game.level = 0;
+                    game.collision_objects.clear();
+                    loadLevel(&mut game.collision_objects, &mut game.doors, 0);
                 }
             }
             
@@ -252,6 +298,7 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
                             y: 0.0,
                         },
                         grounded: false,
+                        frame: 0,
                     };
                     game.collision_objects.clear();
                     loadLevel(&mut game.collision_objects, &mut game.doors, 0);
@@ -377,12 +424,19 @@ pub fn render_platformer(game: &mut Game, engine: &mut Engine) {
 
     // set guy
     trfs[guy_idx] = AABB {
-        center: game.guy.pos,
-        size: Vec2 { x: 16.0, y: 16.0 },
+        center: game.guy.pos + 3.0,
+        size: Vec2 { x: 32.0, y: 32.0 },
     }
     .into();
     // TODO animation frame
-    uvs[guy_idx] = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, 16, 64, 8, 70, 70);
+    // let mut x_off: u16 = 24;
+    // if game.guy.frame < 16{
+    //     // guy is walking, size is 30 x 120
+    //     x_off = 44;
+    // }
+    uvs[guy_idx] = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, GUY_FRAMES[game.guy.frame].0 + 24, GUY_FRAMES[game.guy.frame].1 + 44, 8, 100, 100);
+
+    //uvs[guy_idx] = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, GUY_FRAMES[game.guy.frame].0, GUY_FRAMES[game.guy.frame].0, 8, 128, 130);
     // SheetRegion::new(0, 16, 480, 8, 16, 16);
     
 

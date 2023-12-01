@@ -119,7 +119,7 @@ impl engine::Game for Game {
             screen_size: [W, H],
         };
         
-        newSpriteGroup("content/Swordsman/Idle.png", engine, &camera); // 0
+        newSpriteGroup("content/Swordsman/swordsman_sheet.png", engine, &camera); // 0
         newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 1 (for platformer)
         newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 2 (for simon says)
         //newSpriteGroup("content/Objects/DoorUnlocked.png", engine, &camera); // 2
@@ -134,6 +134,7 @@ impl engine::Game for Game {
                 y: 0.0,
             },
             grounded: false,
+            frame: 0,
         };
 
         
