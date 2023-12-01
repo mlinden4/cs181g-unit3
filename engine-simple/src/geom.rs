@@ -25,6 +25,7 @@ impl From<AABB> for Transform {
             rot: 0.0,
         }
     }
+
 }
 
 impl From<Rect> for Transform {
@@ -102,6 +103,23 @@ impl AABB {
         AABB {
             center: Vec2::new(x, y), 
             size: Vec2::new(w, h),
+        }
+    }
+
+    pub fn contains(&self, x: f32, y: f32) -> bool{
+        let in_horz = (self.center.x - (self.size.x / 2.0) < x) && (self.center.x + (self.size.x / 2.0) >= x);
+        let in_vert = (self.center.y - (self.size.y / 2.0) < y) && (self.center.y + (self.size.y / 2.0) >= y);
+        
+        in_horz && in_vert
+    }
+
+    pub fn to_transform_rot(&self, rot:f32) -> Transform {
+        Transform {
+            w: self.size.x as u16,
+            h: self.size.y as u16,
+            x: self.center.x,
+            y: self.center.y,
+            rot,
         }
     }
 
