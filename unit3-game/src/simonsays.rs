@@ -5,10 +5,13 @@ use engine_simple::wgpu;
 use engine_simple::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use rand::Rng;
 use std::f32::RADIX;
+use std::f32::consts::PI;
 // use std::os::windows::fs::FileTypeExt;
 use std::path::Path;
 use std::fs::read_to_string;
+use std::time::Duration;
 use std::{thread, time};
+
 
 use crate::{SpriteTile, Game, getSpriteFromSheet, getSpriteFromSheet_Demo, GameMode};
 
@@ -16,8 +19,15 @@ const W: f32 = 320.0;
 const H: f32 = 240.0;
 
 const TILE_SIZE: u16 = 256;
+const SCALING_FACTOR: f32 = 5.0;
+const PATTERN_DELAY: Duration = time::Duration::from_millis(500);
 
-
+pub struct SimonSaysState {
+    pub knobs: Vec<(SpriteTile, f32)>, //Vec of sprites and their rotation
+    pub pattern: Vec<usize>,   //The pattern
+    pub pattern_counter: usize,
+    pub awaitInput: bool,
+}
 
 
 fn newSpriteTile_Square(pos_x: f32, pos_y: f32, size: f32, tex_x: u16, tex_y: u16) -> SpriteTile {
@@ -27,7 +37,6 @@ fn newSpriteTile_Square(pos_x: f32, pos_y: f32, size: f32, tex_x: u16, tex_y: u1
     }
 }
 
-
 fn newSpriteTile_Rect(pos_x: f32, pos_y: f32, width: f32, height: f32, tex_x: u16, tex_y: u16) -> SpriteTile {
     SpriteTile {
         collision: AABB::new(pos_x, pos_y, width, height),
@@ -35,41 +44,105 @@ fn newSpriteTile_Rect(pos_x: f32, pos_y: f32, width: f32, height: f32, tex_x: u1
     }
 }
 
-pub fn initialize(simon_says_objects: &mut Vec<SpriteTile>){
+pub fn initialize() -> SimonSaysState{
 
-    simon_says_objects.push(newSpriteTile_Rect(W/4.0, H/2.0, W/8.0, H/4.0, 1, 0));          // Left
-    simon_says_objects.push(newSpriteTile_Rect(3.0*W/4.0, H/2.0, W/8.0, H/4.0, 2, 2));      // Right
-    simon_says_objects.push(newSpriteTile_Rect(W/2.0, 3.0*H/4.0, W/8.0, H/4.0, 0, 2));      // Top
-    simon_says_objects.push(newSpriteTile_Rect(W/2.0, H/4.0, W/8.0, H/4.0, 2, 0));      // Bottom
+    let mut knobs = Vec::default();
+    knobs.push((newSpriteTile_Square(W/4.0, H/2.0,  H/4.0, 2, 0), 0.0));          // Left
+    knobs.push((newSpriteTile_Square(3.0*W/4.0, H/2.0,  H/4.0, 2, 0), 0.0));      // Right
+    knobs.push((newSpriteTile_Square(W/2.0, 3.0*H/4.0,  H/4.0, 2, 0), 0.0));      // Top
+    knobs.push((newSpriteTile_Square(W/2.0, H/4.0,  H/4.0, 2, 0), 0.0));          // Bottom
 
+    let mut pattern = Vec::default();
+    pattern.push(rand::thread_rng().gen_range(0..=3));
+    pattern.push(rand::thread_rng().gen_range(0..=3));
+
+    SimonSaysState { 
+        knobs, 
+        pattern, 
+        pattern_counter: 0,
+        awaitInput: false,
+    }
 }
 
 pub fn update_simon_says(game: &mut Game, engine: &mut Engine){
     
-    if engine.input.is_mouse_pressed(winit::event::MouseButton::Left) {
-        // TODO screen -> multicord needed
+    if game.simon_says.awaitInput {
+        if engine.input.is_mouse_pressed(winit::event::MouseButton::Left) {
 
-        let scaling_factor: f32 = 5.0;
-            
-        let window_height = engine.renderer.gpu.config.height as f32;
-        let window_witdh = engine.renderer.gpu.config.width as f32;
+            let window_height = engine.renderer.gpu.config.height as f32;
+    
+            let mouse_pos = engine.input.mouse_pos();
+            // Normalize mouse clicks to be 00 at bottom left corner
+            let (x_norm, y_norm) = ((mouse_pos.x as f32 + game.camera.screen_pos[0])/SCALING_FACTOR,
+                                    (((mouse_pos.y as f32 - window_height) * (-1.0 as f32)) + game.camera.screen_pos[1])/SCALING_FACTOR);
+    
+    
+            let mut doRestart = false;
+            let mut finishedPattern = false;
 
-        let mouse_pos = engine.input.mouse_pos();
-        // Normalize mouse clicks to be 00 at bottom left corner
-        let (x_norm, y_norm) = ((mouse_pos.x as f32 + game.camera.screen_pos[0])/scaling_factor,
-                                (((mouse_pos.y as f32 - window_height) * (-1.0 as f32)) + game.camera.screen_pos[1])/scaling_factor);
+            for (idx, ss_object) in game.simon_says.knobs.iter_mut().enumerate() {
+                if(ss_object.0.collision.contains(x_norm, y_norm)){
+                    // Clicked on a knob
+                    if idx == game.simon_says.pattern[game.simon_says.pattern_counter] {
+                        // Clicked on the correct knob, continue
+                        ss_object.1 -= PI/4.0; // Rotate the thing by 45 degrees
+                        game.simon_says.pattern_counter += 1;
+                        if game.simon_says.pattern_counter >= game.simon_says.pattern.len() {
+                            finishedPattern = true;
+                        }
+                        break;
+                    }else{
+                        // Clicked on the wrong knob, restart
+                        doRestart = true;
+                        break;
 
+                    }
 
-        for ss_object in game.simon_says_objects.iter() {
-            if(ss_object.collision.contains(x_norm, y_norm)){
-                println!{"({},{})", ss_object.tex_coord.0, ss_object.tex_coord.1};
-            }else{
-                // println!("no selection");
+                }
             }
-        }
 
+            if doRestart {
+                
+                for ss_object in game.simon_says.knobs.iter_mut() {
+                    ss_object.1 = 0.0;
+                }
+
+                while game.simon_says.pattern.len() > 2 {
+                    game.simon_says.pattern.pop();
+                }
+
+                game.simon_says.pattern_counter = 0;
+                game.simon_says.awaitInput = false;
+
+            }else if finishedPattern {
+                if game.simon_says.pattern_counter > 5 {
+                    game.mode = GameMode::Platformer;
+                    render_simon_says(game, engine);
+                    return;
+                }
+                game.simon_says.pattern.push(rand::thread_rng().gen_range(0..=3));
+                game.simon_says.pattern_counter = 0;
+                game.simon_says.awaitInput = false;
+            }
+    
+    
+        }
+    }else{
+        //Perform the pattern
+
+        game.simon_says.knobs[game.simon_says.pattern[game.simon_says.pattern_counter]].1 += PI/4.0;
+        game.simon_says.pattern_counter += 1;
+        thread::sleep(PATTERN_DELAY);
+        
+        if(game.simon_says.pattern_counter >= game.simon_says.pattern.len()) {
+            game.simon_says.awaitInput = true;
+            game.simon_says.pattern_counter = 0;
+        }
+       
 
     }
+
+    
 
     if engine.input.is_key_pressed(engine::Key::S) {
         game.mode = GameMode::Platformer;
@@ -105,13 +178,13 @@ pub fn render_simon_says(game: &mut Game, engine: &mut Engine) {
     // set walls
     const WALL_START: usize = 1;
 
-    for (ss_object, (trf, uv)) in game.simon_says_objects.iter().zip(
+    for (ss_object, (trf, uv)) in game.simon_says.knobs.iter().zip(
         trfs1[WALL_START..]
             .iter_mut()
             .zip(uvs1[WALL_START..].iter_mut()),
     ) {
-        *trf = (ss_object.collision).into();
-        *uv = getSpriteFromSheet(TILE_SPRITE_GROUP as u16, &ss_object.tex_coord, 12, TILE_SIZE);
+        *trf = ss_object.0.collision.to_transform_rot(ss_object.1);
+        *uv = getSpriteFromSheet(TILE_SPRITE_GROUP as u16, &ss_object.0.tex_coord, 12, TILE_SIZE);
     }
 
 
@@ -123,7 +196,7 @@ pub fn render_simon_says(game: &mut Game, engine: &mut Engine) {
     engine
         .renderer
         .sprites
-        .upload_sprites(&engine.renderer.gpu, SIMON_SAYS_SPRITE_GROUP, 0..WALL_START + game.simon_says_objects.len() + 1);
+        .upload_sprites(&engine.renderer.gpu, SIMON_SAYS_SPRITE_GROUP, 0..WALL_START + game.simon_says.knobs.len() + 1);
     // engine
     //     .renderer
     //     .sprites

@@ -221,7 +221,15 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
                 }
             }
             
-            if game.level == 1 || game.level == 3{
+            if game.level == 1 {
+                if engine.input.is_key_pressed(engine::Key::Space) {
+                    game.mode = GameMode::SimonSays;
+                    render_platformer(game, engine);
+                    return;
+                }
+            }
+
+            if game.level == 3 {
                 // bottom door open
                 if engine.input.is_key_pressed(engine::Key::Space) {
                     game.level = 2;

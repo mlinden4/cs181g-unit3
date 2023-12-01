@@ -5,6 +5,7 @@ use engine_simple as engine;
 use engine_simple::wgpu;
 use engine_simple::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
 use rand::Rng;
+use simonsays::SimonSaysState;
 use winit::platform;
 use std::f32::RADIX;
 // use std::os::windows::fs::FileTypeExt;
@@ -45,7 +46,8 @@ pub struct Game {
     guy: platformer::Guy,
     level:u32,
     mode: GameMode,
-    simon_says_objects: Vec<SpriteTile>,
+    simon_says: SimonSaysState,
+    // spin_saws_objects: Vec<(SpriteTile, u16)>,
 
 }
 
@@ -141,8 +143,14 @@ impl engine::Game for Game {
         platformer::loadLevel(&mut collision_objects, &mut doors, 0);
 
 
-        let mut simon_says_objects: Vec<SpriteTile> = Vec::default();
-        simonsays::initialize(&mut simon_says_objects);
+        // let mut simon_says_objects: Vec<(SpriteTile,f32)> = Vec::default();
+        // let mut ss_state = SimonSaysState {
+        //         knobs: Vec::default(),
+        //         pattern: Vec::default(),
+        //         awaitInput: false,
+        //     }
+        // }
+        
 
 
         //              size_x
@@ -164,7 +172,7 @@ impl engine::Game for Game {
             doors,
             level: 0,
             mode: GameMode::Platformer,
-            simon_says_objects,
+            simon_says: simonsays::initialize(),
         }
     }
 

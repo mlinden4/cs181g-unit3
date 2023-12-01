@@ -25,6 +25,7 @@ impl From<AABB> for Transform {
             rot: 0.0,
         }
     }
+
 }
 
 impl From<Rect> for Transform {
@@ -110,6 +111,16 @@ impl AABB {
         let in_vert = (self.center.y - (self.size.y / 2.0) < y) && (self.center.y + (self.size.y / 2.0) >= y);
         
         in_horz && in_vert
+    }
+
+    pub fn to_transform_rot(&self, rot:f32) -> Transform {
+        Transform {
+            w: self.size.x as u16,
+            h: self.size.y as u16,
+            x: self.center.x,
+            y: self.center.y,
+            rot,
+        }
     }
 
 }
