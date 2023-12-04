@@ -20,7 +20,7 @@ const COLLISION_STEPS: usize = 3;
 const GRAVITY: f32 = 1.0;
 const NO_COLLISION: u16 = 9;
 
-const TOP_HALF_COLLISION: [(u16, u16); 4] = [(0, 3), (1, 3), (2, 3), (3, 3)];
+const TOP_HALF_COLLISION: [(u16, u16); 7] = [(0, 3), (1, 3), (2, 3), (3, 3), (3, 2), (4, 2), (5, 2)];
 const BOT_HALF_COLLISION: [(u16, u16); 2] = [(0,0), (2,2)];
 const DEATH_COLLISION: [(u16, u16); 2] = [(0,0), (2,2)];
 const DOOR_COLLISION: [(u16, u16); 6] = [(6,0), (6,1), (6,2), (6,3), (5,3), (5,4)];
@@ -43,6 +43,7 @@ pub struct Guy {
     pub vel: Vec2,
     pub grounded: bool,
     pub frame: usize,
+    pub respawn_pos: Vec2,
 }
 
 
@@ -65,6 +66,10 @@ impl Guy {
             self.grounded = false;
         }
         
+    }
+
+    fn set_respawn(&mut self){
+        self.respawn_pos = self.pos;
     }
 
     fn moveGuy(&mut self, horz_dir: f32, vert_dir: f32) {
@@ -108,11 +113,7 @@ impl Guy {
     }
 
     fn die(&mut self){
-        self.pos = Vec2 {
-            x: W / 2.0,
-            y: H / 4.0,
-        }
-        
+        self.pos = self.respawn_pos;
     }
 
 }
@@ -136,6 +137,7 @@ pub fn loadLevel(collision_objects: &mut Vec<SpriteTile>, doors: &mut Vec<u16>, 
 
     let segments: Vec<&str> = binding.split(|c| c == ' ' || c == '\n' || c == '(' || c == ')')
         .filter(|s| !s.is_empty())
+        // .rev()
         .collect();
 
     for segment in segments.iter() {
@@ -183,12 +185,201 @@ pub fn loadLevel(collision_objects: &mut Vec<SpriteTile>, doors: &mut Vec<u16>, 
 
 }
 
+fn level_handling(game: &mut Game, engine: &mut Engine, guy_aabb: &AABB){
+    // check if guy collides with doors
+            // Level 0 is start
+            // Level 1 and 3 are level 0 but doors open
+            // Level 2 is next room
+
+            match game.level {
+
+                // Starting Area
+                0 => {
+                    if guy_aabb.center.x > 250.0 && guy_aabb.center.x <= 300.0 {
+                        if guy_aabb.center.y > 70.0 && guy_aabb.center.y < 150.0{
+                            //bottom door collision
+                            game.level = 1;
+                            game.collision_objects.clear();
+                            loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                        } else if guy_aabb.center.y < 215.0 && guy_aabb.center.y > 165.0{
+                            //top door collision
+                            game.level = 3;
+                            game.collision_objects.clear();
+                            loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                        } 
+                    }
+                }
+
+
+                // Starting Area - Bottom Door Open
+                1 => {
+                    if engine.input.is_key_pressed(engine::Key::Space) {
+                        game.mode = GameMode::SimonSays;
+                        render_platformer(game, engine);
+                        return;
+                        // game.level = 5;
+                        // game.collision_objects.clear();
+                        // loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                    }else if guy_aabb.center.x < 250.0 {
+                        //door close, guy left doorway
+                        game.level = 0;
+                        game.collision_objects.clear();
+                        loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                    }
+
+                    if game.simon_says.completed {
+                        game.level = 5;
+                        game.collision_objects.clear();
+                        loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                    }
+                }
+
+
+                // Starting Area - Top Door Open
+                3 => {
+                    // bottom door open
+                    if engine.input.is_key_pressed(engine::Key::Space) {
+                        game.level = 2;
+                        game.collision_objects.clear();
+                        loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                    }else if guy_aabb.center.x < 250.0 {
+                        //door close, guy left doorway
+                        game.level = 0;
+                        game.collision_objects.clear();
+                        loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                    }
+                }
+
+
+                // Top Area
+                2 => {
+                    // Change respawn position based on position in level
+                    if game.guy.pos.y > H / 2.0 && game.guy.respawn_pos == Vec2::new(W / 2.0, H / 4.0)  {  // Where they spawn in
+                        game.guy.set_respawn(); 
+                    }else if game.guy.pos.y < (H / 4.0) && game.guy.pos.x > (W * 0.8) {                         // Bottom right corner after first spike
+                        game.guy.set_respawn();
+                    }else if game.guy.pos.y < (H / 4.0) && game.guy.pos.x < (W / 3.0) {                         // After both acid pits
+                        game.guy.set_respawn();
+                    }
+
+                    if guy_aabb.center.x > 95.0 && guy_aabb.center.x <= 125.0 &&
+                        guy_aabb.center.y > 165.0 && guy_aabb.center.y < 250.0 {
+                            //door collision
+                            game.level = 4;
+                            game.collision_objects.clear();
+                            loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                    }
+                    
+
+                    // Restart from beginning
+                    if engine.input.is_key_pressed(engine::Key::Escape) {
+                        game.level = 0;
+                        game.guy = Guy {
+                            pos: Vec2 {
+                                x: W / 2.0,
+                                y: H / 4.0,
+                            },
+                            vel: Vec2 {
+                                x: 0.0,
+                                y: 0.0,
+                            },
+                            grounded: false,
+                            frame: 0,
+                            respawn_pos: Vec2 {
+                                x: W / 2.0,
+                                y: H / 4.0,
+                            },
+                        };
+                        game.collision_objects.clear();
+                        loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                    }
+                }
+
+                // Top Area - Door Open
+                4 => {
+                    // Top door room door open
+                    if engine.input.is_key_pressed(engine::Key::Space) {
+                        // game.level = 6;
+                        println!("go through door!");
+                        // game.collision_objects.clear();
+                        // loadLevel(&mut game.collision_objects, &mut game.doors, 2);
+                    }else if guy_aabb.center.x < 95.0 {
+                        //door close, guy left doorway
+                        game.level = 2;
+                        game.collision_objects.clear();
+                        loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                    }
+                }
+
+                // Bottom Area
+                5 => {
+
+                    // Change respawn position based on position in level
+                    if game.guy.pos.x > W * 0.8 && game.guy.respawn_pos == Vec2::new(W / 2.0, H / 4.0)  {  // Where they spawn in
+                        game.guy.set_respawn(); 
+                    }
+
+
+                    if guy_aabb.center.x > 250.0 && guy_aabb.center.x <= 305.0 &&
+                        guy_aabb.center.y > 165.0 && guy_aabb.center.y < 250.0 {
+                            //door collision
+                            game.level = 6;
+                            game.collision_objects.clear();
+                            loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                    }
+
+
+                    // Restart from beginning
+                    if engine.input.is_key_pressed(engine::Key::Escape) {
+                        game.level = 0;
+                        game.guy = Guy {
+                            pos: Vec2 {
+                                x: W / 2.0,
+                                y: H / 4.0,
+                            },
+                            vel: Vec2 {
+                                x: 0.0,
+                                y: 0.0,
+                            },
+                            grounded: false,
+                            frame: 0,
+                            respawn_pos: Vec2 {
+                                x: W / 2.0,
+                                y: H / 4.0,
+                            },
+                        };
+                        game.collision_objects.clear();
+                        loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                    }
+                }
+
+                6 => {
+                    // Bot door room door open
+                    if engine.input.is_key_pressed(engine::Key::Space) {
+                        // game.level = 6;
+                        println!("go through door!");
+                        // game.collision_objects.clear();
+                        // loadLevel(&mut game.collision_objects, &mut game.doors, 2);
+                    }else if guy_aabb.center.x < 250.0 || guy_aabb.center.y < 165.0 {
+                        //door close, guy left doorway
+                        game.level = 5;
+                        game.collision_objects.clear();
+                        loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                    }
+                }
+
+                _ => ()
+            }
+
+}
+
 pub fn update_platformer(game: &mut Game, engine: &mut Engine){
 
         // Character movement ------------------------------------------------------------------------
         let dir_x = engine.input.key_axis(engine::Key::Left, engine::Key::Right);
         let dir_y = engine.input.key_axis(engine::Key::Down, engine::Key::Up);
         println!("dirx: {}, diry: {}", dir_x, dir_y);
+        println!("level num: {}", game.level);
         game.guy.moveGuy(dir_x, dir_y);
         // Character movement ------------------------------------------------------------------------
 
@@ -205,8 +396,6 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
         if engine.input.is_key_pressed(engine::Key::S) {
             game.mode = GameMode::SimonSays;
             if !matches!(game.mode, GameMode::Platformer) {
-                // game.camera.screen_pos = [500.0, 500.0];
-                println!("here");
                 render_platformer(game, engine);
             }
         }
@@ -242,69 +431,10 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
             });
             let x_tex_region = (guy_aabb.center.x);//TILE_SIZE as f32) as u16;
             println!("{}, {}", x_tex_region, guy_aabb.center.y);
-            // check if guy collides with doors
-            if guy_aabb.center.x > 250.0 && guy_aabb.center.x <= 300.0  && game.level == 0{
-                if guy_aabb.center.y > 70.0 && guy_aabb.center.y < 150.0{
-                    //bottom door collision
-                    game.level = 1;
-                    game.collision_objects.clear();
-                    loadLevel(&mut game.collision_objects, &mut game.doors, 1);
-                } else if guy_aabb.center.y < 215.0 && guy_aabb.center.y > 165.0{
-                    //top door collision
-                    game.level = 3;
-                    game.collision_objects.clear();
-                    loadLevel(&mut game.collision_objects, &mut game.doors, 3);
-                } 
-            }
             
-            if game.level == 1 {
-                if engine.input.is_key_pressed(engine::Key::Space) {
-                    game.mode = GameMode::SimonSays;
-                    render_platformer(game, engine);
-                    return;
-                }else if guy_aabb.center.x < 250.0 {
-                    //door close, guy left doorway
-                    game.level = 0;
-                    game.collision_objects.clear();
-                    loadLevel(&mut game.collision_objects, &mut game.doors, 0);
-                }
-            }
 
-            if game.level == 3 {
-                // bottom door open
-                if engine.input.is_key_pressed(engine::Key::Space) {
-                    game.level = 2;
-                    game.collision_objects.clear();
-                    loadLevel(&mut game.collision_objects, &mut game.doors, 2);
-                }else if guy_aabb.center.x < 250.0 {
-                    //door close, guy left doorway
-                    game.level = 0;
-                    game.collision_objects.clear();
-                    loadLevel(&mut game.collision_objects, &mut game.doors, 0);
-                }
-            }
-            
-            if game.level == 2{
-                // mini game 1 
-                if engine.input.is_key_pressed(engine::Key::Escape) {
-                    game.level = 0;
-                    game.guy = Guy {
-                        pos: Vec2 {
-                            x: W / 2.0,
-                            y: H / 2.0,
-                        },
-                        vel: Vec2 {
-                            x: 0.0,
-                            y: 0.0,
-                        },
-                        grounded: false,
-                        frame: 0,
-                    };
-                    game.collision_objects.clear();
-                    loadLevel(&mut game.collision_objects, &mut game.doors, 0);
-                }
-            }
-            
+
+            level_handling(game, engine, &guy_aabb);
             
 
 

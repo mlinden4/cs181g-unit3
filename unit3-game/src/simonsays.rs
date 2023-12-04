@@ -27,6 +27,7 @@ pub struct SimonSaysState {
     pub pattern: Vec<usize>,   //The pattern
     pub pattern_counter: usize,
     pub awaitInput: bool,
+    pub completed: bool,
 }
 
 
@@ -61,6 +62,7 @@ pub fn initialize() -> SimonSaysState{
         pattern, 
         pattern_counter: 0,
         awaitInput: false,
+        completed: false,
     }
 }
 
@@ -79,6 +81,8 @@ pub fn update_simon_says(game: &mut Game, engine: &mut Engine){
     
             let mut doRestart = false;
             let mut finishedPattern = false;
+
+            println!("{}, {}, x{}, y{}", mouse_pos.x, mouse_pos.y, x_norm, y_norm);
 
             for (idx, ss_object) in game.simon_says.knobs.iter_mut().enumerate() {
                 if(ss_object.0.collision.contains(x_norm, y_norm)){
@@ -116,6 +120,7 @@ pub fn update_simon_says(game: &mut Game, engine: &mut Engine){
 
             }else if finishedPattern {
                 if game.simon_says.pattern_counter > 5 {
+                    game.simon_says.completed = true;
                     game.mode = GameMode::Platformer;
                     render_simon_says(game, engine);
                     return;

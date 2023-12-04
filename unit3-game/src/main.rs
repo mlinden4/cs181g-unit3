@@ -44,7 +44,7 @@ pub struct Game {
     collision_objects: Vec<SpriteTile>,
     doors: Vec<u16>,
     guy: platformer::Guy,
-    level:u32,
+    level: u16,
     mode: GameMode,
     simon_says: SimonSaysState,
     // spin_saws_objects: Vec<(SpriteTile, u16)>,
@@ -135,6 +135,10 @@ impl engine::Game for Game {
             },
             grounded: false,
             frame: 0,
+            respawn_pos: Vec2 {
+                x: W / 2.0,
+                y: H / 4.0,
+            },
         };
 
         
