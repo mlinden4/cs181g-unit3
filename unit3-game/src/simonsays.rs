@@ -19,7 +19,10 @@ const W: f32 = 320.0;
 const H: f32 = 240.0;
 
 const TILE_SIZE: u16 = 256;
+#[cfg(target_os = "macos")]
 const SCALING_FACTOR: f32 = 5.0;
+#[cfg(target_os = "windows")]
+const SCALING_FACTOR: f32 = 2.5;
 const PATTERN_DELAY: Duration = time::Duration::from_millis(500);
 
 pub struct SimonSaysState {
@@ -78,7 +81,7 @@ pub fn update_simon_says(game: &mut Game, engine: &mut Engine){
             let (x_norm, y_norm) = ((mouse_pos.x as f32 + game.camera.screen_pos[0])/SCALING_FACTOR,
                                     (((mouse_pos.y as f32 - window_height) * (-1.0 as f32)) + game.camera.screen_pos[1])/SCALING_FACTOR);
     
-    
+            println!("MOUSE: {}, {}\nNORM: {}, {}", mouse_pos.x, mouse_pos.y, x_norm,y_norm);
             let mut doRestart = false;
             let mut finishedPattern = false;
 
