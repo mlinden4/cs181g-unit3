@@ -17,7 +17,10 @@ const H: f32 = 240.0;
 
 const TILE_SIZE: u16 = 256;
 
-
+#[cfg(target_os = "macos")]
+const SCALING_FACTOR: f32 = 5.0;
+#[cfg(target_os = "windows")]
+const SCALING_FACTOR: f32 = 2.5;
 
 
 fn newSpriteTile_Square(pos_x: f32, pos_y: f32, size: f32, tex_x: u16, tex_y: u16) -> SpriteTile {
