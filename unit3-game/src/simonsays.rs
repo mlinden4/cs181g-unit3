@@ -91,16 +91,30 @@ pub fn update_simon_says(game: &mut Game, engine: &mut Engine){
                 if(ss_object.0.collision.contains(x_norm, y_norm)){
                     // Clicked on a knob
                     if idx == game.simon_says.pattern[game.simon_says.pattern_counter] {
+                        
                         // Clicked on the correct knob, continue
                         ss_object.1 -= PI/4.0; // Rotate the thing by 45 degrees
+                        
+
+                        match game.simon_says.pattern[game.simon_says.pattern_counter] {
+                            0 => {let _ = game.sfx_manager.play(game.sfx[3].clone());},
+                            1 => {let _ = game.sfx_manager.play(game.sfx[4].clone());},
+                            2 => {let _ = game.sfx_manager.play(game.sfx[5].clone());},
+                            3 => {let _ = game.sfx_manager.play(game.sfx[8].clone());},
+                            _ => (),
+                        }
+
                         game.simon_says.pattern_counter += 1;
+
                         if game.simon_says.pattern_counter >= game.simon_says.pattern.len() {
                             finishedPattern = true;
                         }
+                        
                         break;
                     }else{
                         // Clicked on the wrong knob, restart
                         doRestart = true;
+
                         break;
 
                     }
@@ -129,6 +143,7 @@ pub fn update_simon_says(game: &mut Game, engine: &mut Engine){
                     return;
                 }
                 game.simon_says.pattern.push(rand::thread_rng().gen_range(0..=3));
+                // thread::sleep(PATTERN_DELAY);
                 game.simon_says.pattern_counter = 0;
                 game.simon_says.awaitInput = false;
             }
@@ -138,9 +153,18 @@ pub fn update_simon_says(game: &mut Game, engine: &mut Engine){
     }else{
         //Perform the pattern
 
-        game.simon_says.knobs[game.simon_says.pattern[game.simon_says.pattern_counter]].1 += PI/4.0;
-        game.simon_says.pattern_counter += 1;
         thread::sleep(PATTERN_DELAY);
+        game.simon_says.knobs[game.simon_says.pattern[game.simon_says.pattern_counter]].1 += PI/4.0;
+        println!("pattern num: {}", game.simon_says.pattern[game.simon_says.pattern_counter]);
+        match game.simon_says.pattern[game.simon_says.pattern_counter] {
+            0 => {let _ = game.sfx_manager.play(game.sfx[3].clone());},
+            1 => {let _ = game.sfx_manager.play(game.sfx[4].clone());},
+            2 => {let _ = game.sfx_manager.play(game.sfx[5].clone());},
+            3 => {let _ = game.sfx_manager.play(game.sfx[8].clone());},
+            _ => (),
+        }
+        game.simon_says.pattern_counter += 1;
+        
         
         if(game.simon_says.pattern_counter >= game.simon_says.pattern.len()) {
             game.simon_says.awaitInput = true;

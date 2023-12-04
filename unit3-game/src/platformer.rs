@@ -3,6 +3,8 @@ use engine::Key;
 use engine_simple as engine;
 use engine_simple::wgpu;
 use engine_simple::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
+use kira::manager::AudioManager;
+use kira::sound::static_sound::StaticSoundData;
 use rand::Rng;
 use std::f32::RADIX;
 // use std::os::windows::fs::FileTypeExt;
@@ -60,7 +62,7 @@ impl Guy {
         self.vel.x = direction * GUY_HORZ_SPEED;
     }
 
-    fn handle_jump(&mut self, vert_dir: f32) {
+    fn handle_jump(&mut self, vert_dir: f32,) {
         if vert_dir > 0.0 && self.grounded {
             self.vel.y = 10.0;
             self.grounded = false;
@@ -217,6 +219,7 @@ fn level_handling(game: &mut Game, engine: &mut Engine, guy_aabb: &AABB){
                 // Starting Area - Bottom Door Open
                 1 => {
                     if engine.input.is_key_pressed(engine::Key::Space) {
+                        game.sfx_manager.play(game.sfx[7].clone());
                         game.mode = GameMode::SimonSays;
                         render_platformer(game, engine);
                         // game.simon_says.completed = true; // Uncomment to skip game
@@ -228,7 +231,9 @@ fn level_handling(game: &mut Game, engine: &mut Engine, guy_aabb: &AABB){
                     }
 
                     if game.simon_says.completed {
-                        move_to_level(game, 5)
+                        game.simon_says.completed = false;
+                        move_to_level(game, 5);
+                        
                     }
                 }
 
@@ -237,14 +242,11 @@ fn level_handling(game: &mut Game, engine: &mut Engine, guy_aabb: &AABB){
                 3 => {
                     // bottom door open
                     if engine.input.is_key_pressed(engine::Key::Space) {
-                        game.level = 2;
-                        game.collision_objects.clear();
-                        loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                        game.sfx_manager.play(game.sfx[7].clone());
+                        move_to_level(game, 2);
                     }else if guy_aabb.center.x < 250.0 {
                         //door close, guy left doorway
-                        game.level = 0;
-                        game.collision_objects.clear();
-                        loadLevel(&mut game.collision_objects, &mut game.doors, game.level);
+                        move_to_level(game, 0);
                     }
                 }
 
@@ -293,6 +295,7 @@ fn level_handling(game: &mut Game, engine: &mut Engine, guy_aabb: &AABB){
                 4 => {
                     // Top door room door open
                     if engine.input.is_key_pressed(engine::Key::Space) {
+                        game.sfx_manager.play(game.sfx[7].clone());
                         move_to_level(game, 7);
                     }else if guy_aabb.center.x < 95.0 {
                         //door close, guy left doorway
@@ -341,6 +344,7 @@ fn level_handling(game: &mut Game, engine: &mut Engine, guy_aabb: &AABB){
                 6 => {
                     // Bot door room door open
                     if engine.input.is_key_pressed(engine::Key::Space) {
+                        game.sfx_manager.play(game.sfx[7].clone());
                         move_to_level(game, 7);
                     }else if guy_aabb.center.x < 250.0 || guy_aabb.center.y < 150.0 {
                         //door close, guy left doorway
@@ -383,6 +387,7 @@ fn level_handling(game: &mut Game, engine: &mut Engine, guy_aabb: &AABB){
                                 y: H / 4.0,
                             },
                         };
+                        game.sfx_manager.play(game.sfx[7].clone());
                         move_to_level(game, 0);
                     }else if game.guy.pos.x > 65.0 {
                         move_to_level(game, 7);
@@ -401,7 +406,13 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
         let dir_y = engine.input.key_axis(engine::Key::Down, engine::Key::Up);
         println!("dirx: {}, diry: {}", dir_x, dir_y);
         println!("level num: {}", game.level);
-        game.guy.moveGuy(dir_x, dir_y);
+        game.guy.moveGuy( dir_x, dir_y);
+
+        //Play jump sound
+        if !game.guy.grounded && game.guy.vel.y == 9.0 {
+            println!("playing sound");
+            game.sfx_manager.play(game.sfx[1].clone()).unwrap();
+        }
         // Character movement ------------------------------------------------------------------------
 
         if engine.input.is_key_pressed(engine::Key::R) {
@@ -472,6 +483,7 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
                     }
 
                     if DEATH_COLLISION.contains(&game.collision_objects[*wall_idx].tex_coord) {
+                        game.sfx_manager.play(game.sfx[2].clone());
                         game.guy.die();
                     }
 
