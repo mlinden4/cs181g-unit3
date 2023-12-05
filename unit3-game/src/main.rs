@@ -5,6 +5,9 @@ use engine::Key;
 use engine_simple as engine;
 use engine_simple::wgpu;
 use engine_simple::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
+use kira::manager::{AudioManager, AudioManagerSettings};
+use kira::manager::backend::DefaultBackend;
+use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
 use rand::Rng;
 use simonsays::SimonSaysState;
 use winit::platform;
@@ -13,6 +16,7 @@ use std::f32::RADIX;
 use std::path::Path;
 use std::fs::read_to_string;
 use std::{thread, time};
+use kira;
 
 mod platformer;
 mod simonsays;
@@ -45,8 +49,10 @@ pub struct Game {
     collision_objects: Vec<SpriteTile>,
     doors: Vec<u16>,
     guy: platformer::Guy,
-    level:u32,
+    level: u16,
     mode: GameMode,
+    sfx_manager: AudioManager,
+    sfx: Vec<StaticSoundData>,
     simon_says: SimonSaysState,
     // spin_saws_objects: Vec<(SpriteTile, u16)>,
     connect_wires: ConnectWiresState,
@@ -128,6 +134,21 @@ impl engine::Game for Game {
 
         //newSpriteGroup("content/Objects/DoorUnlocked.png", engine, &camera); // 2
 
+        
+
+        
+        
+        let mut collision_objects: Vec<SpriteTile> = Vec::default(); 
+        let mut doors: Vec<u16> = Vec::default(); 
+        platformer::loadLevel(&mut collision_objects, &mut doors, 0);
+
+
+        let mut sfx_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
+        let mut sfx: Vec<StaticSoundData> = Vec::default();
+        for i in 0..=8 {
+            sfx.push(StaticSoundData::from_file(format!("content/SFX/beep{}.wav",i), StaticSoundSettings::default()).unwrap());
+        }
+
         let guy = platformer::Guy {
             pos: Vec2 {
                 x: W / 2.0,
@@ -139,22 +160,11 @@ impl engine::Game for Game {
             },
             grounded: false,
             frame: 0,
+            respawn_pos: Vec2 {
+                x: W / 2.0,
+                y: H / 4.0,
+            },
         };
-
-        
-        
-        let mut collision_objects: Vec<SpriteTile> = Vec::default(); 
-        let mut doors: Vec<u16> = Vec::default(); 
-        platformer::loadLevel(&mut collision_objects, &mut doors, 0);
-
-
-        // let mut simon_says_objects: Vec<(SpriteTile,f32)> = Vec::default();
-        // let mut ss_state = SimonSaysState {
-        //         knobs: Vec::default(),
-        //         pattern: Vec::default(),
-        //         awaitInput: false,
-        //     }
-        // }
         
 
 
@@ -177,6 +187,8 @@ impl engine::Game for Game {
             doors,
             level: 0,
             mode: GameMode::Platformer,
+            sfx_manager,
+            sfx,
             simon_says: simonsays::initialize(),
             connect_wires: connectwires::initialize(),
         }
