@@ -81,7 +81,6 @@ impl Guy {
         //Handle animation
         if horz_dir == 0.0 || vert_dir != 0.0{
             // use idle frames when still or jumping
-            // delay frames are frames to make the idle look better after 20
             if self.frame == 25 || self.frame < 16{
                 // restart animation
                 self.frame = 16;
@@ -273,9 +272,15 @@ pub fn update_platformer(game: &mut Game, engine: &mut Engine){
             if game.level == 3 {
                 // bottom door open
                 if engine.input.is_key_pressed(engine::Key::Space) {
-                    game.level = 2;
-                    game.collision_objects.clear();
-                    loadLevel(&mut game.collision_objects, &mut game.doors, 2);
+                    game.mode = GameMode::ConnectWires;
+                    if !matches!(game.mode, GameMode::Platformer) {
+                        // game.camera.screen_pos = [500.0, 500.0];
+                        println!("here");
+                        render_platformer(game, engine);
+                    }
+                    // game.level = 2;
+                    // game.collision_objects.clear();
+                    // loadLevel(&mut game.collision_objects, &mut game.doors, 2);
                 }else if guy_aabb.center.x < 250.0 {
                     //door close, guy left doorway
                     game.level = 0;
@@ -428,12 +433,7 @@ pub fn render_platformer(game: &mut Game, engine: &mut Engine) {
         size: Vec2 { x: 32.0, y: 32.0 },
     }
     .into();
-    // TODO animation frame
-    // let mut x_off: u16 = 24;
-    // if game.guy.frame < 16{
-    //     // guy is walking, size is 30 x 120
-    //     x_off = 44;
-    // }
+    // animate guy
     uvs[guy_idx] = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, GUY_FRAMES[game.guy.frame].0 + 24, GUY_FRAMES[game.guy.frame].1 + 44, 8, 100, 100);
 
     //uvs[guy_idx] = getSpriteFromSheet_Demo(DEMO_SPRITE_GROUP as u16, GUY_FRAMES[game.guy.frame].0, GUY_FRAMES[game.guy.frame].0, 8, 128, 130);

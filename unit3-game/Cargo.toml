@@ -12,6 +12,8 @@ winit = "0.28"
 rand = "0.8"
 image = {version="0.24.7", features=["png"]}
 bytemuck = "1.14.0"
+strum = "0.25.0"
+strum_macros = "0.25.3"
 
 [features]
 default = []

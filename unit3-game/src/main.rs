@@ -1,5 +1,6 @@
 // TODO: use AABB instead of Rect for centered box, so collision checking doesn't have to offset by half size
 
+use connectwires::ConnectWiresState;
 use engine::Key;
 use engine_simple as engine;
 use engine_simple::wgpu;
@@ -15,7 +16,7 @@ use std::{thread, time};
 
 mod platformer;
 mod simonsays;
-
+mod connectwires;
 const W: f32 = 320.0;
 const H: f32 = 240.0;
 const SPRITE_MAX: usize = 128;
@@ -48,6 +49,7 @@ pub struct Game {
     mode: GameMode,
     simon_says: SimonSaysState,
     // spin_saws_objects: Vec<(SpriteTile, u16)>,
+    connect_wires: ConnectWiresState,
 
 }
 
@@ -122,6 +124,8 @@ impl engine::Game for Game {
         newSpriteGroup("content/Swordsman/swordsman_sheet.png", engine, &camera); // 0
         newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 1 (for platformer)
         newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 2 (for simon says)
+        newSpriteGroup("content/puzzle_tiles.png", engine, &camera); // 3 (for connect wires)
+
         //newSpriteGroup("content/Objects/DoorUnlocked.png", engine, &camera); // 2
 
         let guy = platformer::Guy {
@@ -174,6 +178,7 @@ impl engine::Game for Game {
             level: 0,
             mode: GameMode::Platformer,
             simon_says: simonsays::initialize(),
+            connect_wires: connectwires::initialize(),
         }
     }
 
@@ -183,7 +188,7 @@ impl engine::Game for Game {
 
         match self.mode {
             GameMode::Platformer => platformer::update_platformer(self, engine),
-            GameMode::ConnectWires => (),
+            GameMode::ConnectWires => connectwires::update_connect_wires(self, engine),
             GameMode::SimonSays => simonsays::update_simon_says(self, engine),
         }
         
@@ -195,7 +200,7 @@ impl engine::Game for Game {
 
         match self.mode {
             GameMode::Platformer => platformer::render_platformer(self, engine),
-            GameMode::ConnectWires => (),
+            GameMode::ConnectWires => connectwires::render_connect_wires(self, engine),
             GameMode::SimonSays => simonsays::render_simon_says(self, engine),
         }
         
