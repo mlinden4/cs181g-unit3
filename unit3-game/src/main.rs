@@ -5,39 +5,38 @@ use engine::Key;
 use engine_simple as engine;
 use engine_simple::wgpu;
 use engine_simple::{geom::*, Camera, Engine, SheetRegion, Transform, Zeroable};
-use kira::manager::{AudioManager, AudioManagerSettings};
 use kira::manager::backend::DefaultBackend;
+use kira::manager::{AudioManager, AudioManagerSettings};
 use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
+use mining::MiningState;
 use rand::Rng;
 use simonsays::SimonSaysState;
-use winit::platform;
 use std::f32::RADIX;
+use winit::platform;
 // use std::os::windows::fs::FileTypeExt;
-use std::path::Path;
-use std::fs::read_to_string;
-use std::{thread, time};
 use kira;
+use std::fs::read_to_string;
+use std::path::Path;
+use std::{thread, time};
 
+mod connectwires;
+mod mining;
 mod platformer;
 mod simonsays;
-mod connectwires;
 const W: f32 = 320.0;
 const H: f32 = 240.0;
 const SPRITE_MAX: usize = 128;
-
 
 const TOP_HALF_COLLISION: [(u16, u16); 4] = [(0, 3), (1, 3), (2, 3), (3, 3)];
 // const BOT_HALF_COLLISION: [(u16, u16); 2] = [(0,0), (2,2)];
 // const DEATH_COLLISION: [(u16, u16); 2] = [(0,0), (2,2)];
 // const DOOR_COLLISION: [(u16, u16); 6] = [(6,0), (6,1), (6,2), (6,3), (5,3), (5,4)];
 
-
 // const LEFT: &'static [&'static str] = &["Hello", "World", "!"];
 
 // const TILE_SIZE: u16 = 256;
 // const TILE_SHEET_W: u16 = 7 * TILE_SIZE;
 // const TILE_SHEET_H: u16 = 5 * TILE_SIZE;
-
 
 pub struct SpriteTile {
     collision: AABB,
@@ -56,27 +55,27 @@ pub struct Game {
     simon_says: SimonSaysState,
     // spin_saws_objects: Vec<(SpriteTile, u16)>,
     connect_wires: ConnectWiresState,
-
+    mining: MiningState,
 }
 
 enum GameMode {
     Platformer,
     SimonSays,
     ConnectWires,
+    Mining,
     // Other modes...
 }
 
 fn newSpriteGroup(sprite_path: &str, engine: &mut Engine, camera_ref: &Camera) {
-    
     let camera = camera_ref.clone();
 
     let sprite_img = image::open(sprite_path).unwrap().into_rgba8();
-    
+
     let sprite_tex = engine.renderer.gpu.create_texture(
         &sprite_img,
         wgpu::TextureFormat::Rgba8UnormSrgb,
         sprite_img.dimensions(),
-        Some(sprite_path),  // Some string or something
+        Some(sprite_path), // Some string or something
     );
 
     engine.renderer.sprites.add_sprite_group(
@@ -86,20 +85,45 @@ fn newSpriteGroup(sprite_path: &str, engine: &mut Engine, camera_ref: &Camera) {
         vec![SheetRegion::zeroed(); SPRITE_MAX],
         camera,
     );
-
 }
 
-fn getSpriteFromSheet(sheet_num: u16, tex_coord: &(u16,u16), depth: u16, sprite_size: u16) -> SheetRegion {
+fn getSpriteFromSheet(
+    sheet_num: u16,
+    tex_coord: &(u16, u16),
+    depth: u16,
+    sprite_size: u16,
+) -> SheetRegion {
     if TOP_HALF_COLLISION.contains(tex_coord) {
-        SheetRegion::new(sheet_num, tex_coord.0*sprite_size, tex_coord.1*sprite_size, depth, sprite_size, sprite_size/2)
-    }else{
+        SheetRegion::new(
+            sheet_num,
+            tex_coord.0 * sprite_size,
+            tex_coord.1 * sprite_size,
+            depth,
+            sprite_size,
+            sprite_size / 2,
+        )
+    } else {
         // *trf = (wall.collision).into();
-        SheetRegion::new(sheet_num, tex_coord.0*sprite_size, tex_coord.1*sprite_size, depth, sprite_size, sprite_size)
+        SheetRegion::new(
+            sheet_num,
+            tex_coord.0 * sprite_size,
+            tex_coord.1 * sprite_size,
+            depth,
+            sprite_size,
+            sprite_size,
+        )
     }
 }
 
 // Meant to just get it directly based on data
-fn getSpriteFromSheet_Demo(sheet_num: u16, x: u16, y: u16, depth: u16, w: u16, h: u16) -> SheetRegion {
+fn getSpriteFromSheet_Demo(
+    sheet_num: u16,
+    x: u16,
+    y: u16,
+    depth: u16,
+    w: u16,
+    h: u16,
+) -> SheetRegion {
     SheetRegion::new(sheet_num, x, y, depth, w, h)
 }
 
@@ -110,8 +134,14 @@ fn newSpriteTile_Square(pos_x: f32, pos_y: f32, size: f32, tex_x: u16, tex_y: u1
     }
 }
 
-
-fn newSpriteTile_Rect(pos_x: f32, pos_y: f32, width: f32, height: f32, tex_x: u16, tex_y: u16) -> SpriteTile {
+fn newSpriteTile_Rect(
+    pos_x: f32,
+    pos_y: f32,
+    width: f32,
+    height: f32,
+    tex_x: u16,
+    tex_y: u16,
+) -> SpriteTile {
     SpriteTile {
         collision: AABB::new(pos_x, pos_y, width, height),
         tex_coord: (tex_x, tex_y),
@@ -119,34 +149,35 @@ fn newSpriteTile_Rect(pos_x: f32, pos_y: f32, width: f32, height: f32, tex_x: u1
 }
 
 impl engine::Game for Game {
-
     fn new(engine: &mut Engine) -> Self {
-        
         let camera = Camera {
             screen_pos: [0.0, 0.0],
             screen_size: [W, H],
         };
-        
+
         newSpriteGroup("content/Swordsman/swordsman_sheet.png", engine, &camera); // 0
         newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 1 (for platformer)
         newSpriteGroup("content/new_spritesheet.png", engine, &camera); // 2 (for simon says)
         newSpriteGroup("content/puzzle_tiles.png", engine, &camera); // 3 (for connect wires)
+        newSpriteGroup("content/puzzle_tiles.png", engine, &camera); // 4 (for mining)
 
         //newSpriteGroup("content/Objects/DoorUnlocked.png", engine, &camera); // 2
 
-        
-
-        
-        
-        let mut collision_objects: Vec<SpriteTile> = Vec::default(); 
-        let mut doors: Vec<u16> = Vec::default(); 
+        let mut collision_objects: Vec<SpriteTile> = Vec::default();
+        let mut doors: Vec<u16> = Vec::default();
         platformer::loadLevel(&mut collision_objects, &mut doors, 0);
 
-
-        let mut sfx_manager = AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
+        let mut sfx_manager =
+            AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()).unwrap();
         let mut sfx: Vec<StaticSoundData> = Vec::default();
         for i in 0..=8 {
-            sfx.push(StaticSoundData::from_file(format!("content/SFX/beep{}.wav",i), StaticSoundSettings::default()).unwrap());
+            sfx.push(
+                StaticSoundData::from_file(
+                    format!("content/SFX/beep{}.wav", i),
+                    StaticSoundSettings::default(),
+                )
+                .unwrap(),
+            );
         }
 
         let guy = platformer::Guy {
@@ -154,10 +185,7 @@ impl engine::Game for Game {
                 x: W / 2.0,
                 y: H / 2.0,
             },
-            vel: Vec2 {
-                x: 0.0,
-                y: 0.0,
-            },
+            vel: Vec2 { x: 0.0, y: 0.0 },
             grounded: false,
             frame: 0,
             respawn_pos: Vec2 {
@@ -165,21 +193,18 @@ impl engine::Game for Game {
                 y: H / 4.0,
             },
         };
-        
-
 
         //              size_x
         //            --------------
         //   size_y   | c_xy x     |
         //            --------------
 
- 
         // let font = engine::BitFont::with_sheet_region(
         //     '0'..='9',
         //     SheetRegion::new(0, 0, 512, 0, 80, 8),
         //     10,
         // );
-        
+
         Game {
             camera,
             guy,
@@ -191,34 +216,27 @@ impl engine::Game for Game {
             sfx,
             simon_says: simonsays::initialize(),
             connect_wires: connectwires::initialize(),
+            mining: mining::initialize(),
         }
     }
 
-
-
     fn update(&mut self, engine: &mut Engine) {
-
         match self.mode {
             GameMode::Platformer => platformer::update_platformer(self, engine),
             GameMode::ConnectWires => connectwires::update_connect_wires(self, engine),
             GameMode::SimonSays => simonsays::update_simon_says(self, engine),
+            GameMode::Mining => mining::update_mining(self, engine),
         }
-        
     }
-    
-    
-    
-    fn render(&mut self, engine: &mut Engine) {
 
+    fn render(&mut self, engine: &mut Engine) {
         match self.mode {
             GameMode::Platformer => platformer::render_platformer(self, engine),
             GameMode::ConnectWires => connectwires::render_connect_wires(self, engine),
             GameMode::SimonSays => simonsays::render_simon_says(self, engine),
+            GameMode::Mining => mining::render_mining(self, engine),
         }
-        
     }
-
-
 }
 fn main() {
     Engine::new(winit::window::WindowBuilder::new()).run::<Game>();
