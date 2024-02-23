@@ -1,8 +1,8 @@
-**To play the game**:
+##To play the game:
 clone the repository, navigate to the unit3-game folder, and run the command:
-'''
+```
 cargo build
-'''
+```
 
 Then, use the arrow keys to move the character around the choose your own adventure game.
 
