@@ -2,7 +2,7 @@
 clone the repository, navigate to the unit3-game folder, and run the command:
 
 ```
-cargo build
+cargo run
 ```
 
 ## Gameplay:
